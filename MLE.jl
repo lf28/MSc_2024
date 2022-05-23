@@ -88,7 +88,7 @@ md"""
 For logistic regression, the model can be written as 
 
 $$P(y|\boldsymbol{x}) = \text{Bernoulli}(\sigma(\boldsymbol{x}^\top \boldsymbol{\beta})),$$
-Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_m]^\top$ where $y_i \in \{0, 1\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_m]^\top$;
+Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ where $y_i \in \{0, 1\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_n]^\top$;
 
 *  what is $E[y|\boldsymbol{x}]$ ? Plot $E[y|\boldsymbol{x}]$ by 3-d surface or 2-d contour plot.
 *  what are the paremeter for this model ?
@@ -123,7 +123,7 @@ You can try the following to test your understanding after the meeting.
 For Poisson regression (where observations $y$ are usually counting data, say web page visitor counts etc.), the model can be written as 
 
 $$P(y|\boldsymbol{x}) = \text{Poisson}(\exp(\boldsymbol{x}^\top \boldsymbol{\beta})),$$
-Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_m]^\top$ where $y_i \in \{0, 1, 2,\ldots\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_m]^\top$;
+Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ where $y_i \in \{0, 1, 2,\ldots\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_n]^\top$;
 *  What is $E[y|\boldsymbol{x}]$ ?
 *  What are the paremeter for this model ?
 *  What is the likelihood function ?
@@ -151,7 +151,7 @@ md"""
 For Geometric regression (where observations $y$ are usually counting data, say how many times you need to try until success), the model can be written as 
 
 $$P(y|\boldsymbol{x}) = \text{Geometric}(\sigma(\boldsymbol{x}^\top \boldsymbol{\beta})),$$
-Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_m]^\top$ where $y_i \in \{0, 1, 2,\ldots\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_m]^\top$;
+Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ where $y_i \in \{0, 1, 2,\ldots\}$ and $\boldsymbol{X} = [\boldsymbol{x}_1, \boldsymbol{x}_2, \ldots, \boldsymbol{x}_n]^\top$;
 *  What is $E[y|\boldsymbol{x}]$ ?
 *  What are the paremeter for this model ?
 *  What is the likelihood function ?
