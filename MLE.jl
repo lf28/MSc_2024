@@ -33,8 +33,8 @@ Given a random sample, $\mathcal{D}=\{d_1, d_2, \ldots, d_n\}$, from a Poisson d
 # ╔═╡ 24711b65-cb53-4f9b-a0e3-21f9d2287008
 begin
 	λ = rand() * 10
-	m = 10000
-	D2b = rand(Poisson(λ), m)
+	n = 10000
+	D2b = rand(Poisson(λ), n)
 end
 
 # ╔═╡ b1d6136d-403d-47b7-aa9d-60b59d0b15b6
@@ -72,11 +72,11 @@ Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ and $\boldsymbol{X} =
 
 # ╔═╡ 6b2b1d16-7977-4087-bb9e-e1555039a8a3
 begin
-	n = 5
-	m3 = 100
-	β₃ = rand(n)
+	dim₃ = 5
+	n₃ = 100
+	β₃ = rand(dim₃)
 	σ² = 0.5
-	X = rand(m3,n)
+	X = rand(n₃,dim₃)
 	X[:,1] .= 1
 	y₃ = rand.(Normal.(X * β₃, sqrt(σ²)))
 end
@@ -102,14 +102,14 @@ Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ where $y_i \in \{0, 1
 # ╔═╡ a646e1b0-f7ab-43e2-bd47-aaab18a892f2
 begin
 # 	number of dimensions 
-	n₄ = 2
+	dim₄ = 2
 # 	number of observations
-	m₄ = 100
+	n₄ = 100
 # 	a n*m matrix, for this case there is no intercept term, or equivalently $\beta_0 = 0$
-	X₄ = rand(m₄,n₄)
+	X₄ = rand(n₄,dim₄)
 # 	make X₄ ranging between -10 to 10
 	X₄ = X₄ .* 20 .- 10.0
-	β₄ = rand(n₄)	
+	β₄ = rand(dim₄)	
 end
 
 # ╔═╡ 2bd64856-9f58-44d5-af7a-972c91878c9c
@@ -136,12 +136,12 @@ Given data $\boldsymbol{y} = [y_1, y_2, \ldots, y_n]^\top$ where $y_i \in \{0, 1
 # ╔═╡ 7c5a6de4-c194-4628-a891-82d56f9901f1
 begin
 	# 	number of dimensions 
-	n₅ = 5
+	dim₅ = 5
 # 	number of observations
-	m₅ = 100
+	n₅ = 100
 # 	a n*m matrix, for this case there is no intercept term, or equivalently $\beta_0 = 0$
-	X₅ = rand(m₅,n₅) *2 .-1
-	β₅ = rand(n₅)	
+	X₅ = rand(n₅,dim₅) *2 .-1
+	β₅ = rand(dim₅)	
 end
 
 # ╔═╡ 72b406db-531a-4b2c-ad64-4bb0b5814111
@@ -1228,14 +1228,14 @@ version = "0.9.1+5"
 # ╟─97c8fe8a-21c0-11ec-1100-638723043ca3
 # ╟─59b9cc9d-3440-41b3-878d-5ebe29c06461
 # ╟─b8c735dc-3bc0-4dd7-a2eb-8fa2cd10c57a
-# ╟─24711b65-cb53-4f9b-a0e3-21f9d2287008
+# ╠═24711b65-cb53-4f9b-a0e3-21f9d2287008
 # ╟─b1d6136d-403d-47b7-aa9d-60b59d0b15b6
 # ╟─edd96a1b-b724-48c0-8d1e-2a1862e40ce3
 # ╠═6b2b1d16-7977-4087-bb9e-e1555039a8a3
 # ╟─2b2dafde-462b-4784-943d-dc2f590bc857
 # ╠═a646e1b0-f7ab-43e2-bd47-aaab18a892f2
 # ╟─2bd64856-9f58-44d5-af7a-972c91878c9c
-# ╟─7c5a6de4-c194-4628-a891-82d56f9901f1
+# ╠═7c5a6de4-c194-4628-a891-82d56f9901f1
 # ╟─72b406db-531a-4b2c-ad64-4bb0b5814111
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
