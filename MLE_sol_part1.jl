@@ -170,9 +170,11 @@ $\hat\lambda \sim \mathcal N(E[\hat\lambda], \text{Var}[\hat\lambda]),$
 
 i.e. the MLE is Gaussian distributed with mean $\lambda$ and variance $\lambda/n$
 
-It tells you it is *safe* to use MLE, the MLE *on average* equals to the unknown true parameter and the more data you have (unbiased), the deviance between the MLE and the true parameter is smaller (efficiency). 
+It tells you it is *safe* to use MLE, the MLE *on average* equals to the unknown true parameter (unbiased) and the more data you have, the deviance between the MLE and the true parameter on average is smaller (efficiency). 
 
-Here is a more constructive view of **sampling distribution**:
+The efficiency reduction is of order of $\sqrt{n}$ though. That is if we have 10000 more times of amout of data, the standard deviation is reduced only by a factor of $\sqrt{10000} = 100$. So you need $O(n^2)$ number of data to reduce the standard deviance by a factor of $n$. But we can show the MLE for our Poisson case is the *most efficient* one (i.e. with the smallest variance) among all unbiased linear estimators. 
+
+Here is a more constructive view of the **sampling distribution**:
 
 For $i= 1\ldots, \infty$
 * repeat the data collection process, i.e. sample $\mathcal D_i$ 
@@ -180,7 +182,7 @@ For $i= 1\ldots, \infty$
 $$\mathcal D_i \sim \text{Population}$$
 * calculate the MLE 
 
-$$\hat{\lambda}_i(\mathcal D_i)$$
+$$\hat{\lambda}_i =\hat{\lambda}(\mathcal D_i)$$
 
 The empirical distribution 
 
@@ -1379,7 +1381,7 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╠═97c8fe8a-21c0-11ec-1100-638723043ca3
+# ╟─97c8fe8a-21c0-11ec-1100-638723043ca3
 # ╟─b8c735dc-3bc0-4dd7-a2eb-8fa2cd10c57a
 # ╠═24711b65-cb53-4f9b-a0e3-21f9d2287008
 # ╟─14533aa8-5e43-498d-9a2a-e9fcb8ad0a9b
