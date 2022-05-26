@@ -160,7 +160,7 @@ $\hat\lambda = \frac{1}{n} \sum_{i=1}^n y_i,$ its expectation is
 
 $E[\hat\lambda] = \frac{1}{n} \sum_{i=1}^n E[y_i] = \frac{1}{n} \sum_{i=1}^n \lambda=\lambda$
 
-we also can calculate its variance is 
+we also can calculate its variance:
 
 $\text{Var}[\hat\lambda] = \text{Var}[\frac{1}{n} \sum_{i=1}^n y_i] = \frac{1}{n^2} \sum_{i=1}^n \text{Var}(y_i) = \frac{1}{n^2} n\lambda = \frac{\lambda}{n}$
 
@@ -169,6 +169,8 @@ According to large number theory, we have
 $\hat\lambda \sim \mathcal N(E[\hat\lambda], \text{Var}[\hat\lambda]),$
 
 i.e. the MLE is Gaussian distributed with mean $\lambda$ and variance $\lambda/n$
+
+It tells you it is *safe* to use MLE, the MLE *on average* equals to the unknown true parameter and the more data you have (unbiased), the deviance between the MLE and the true parameter is smaller (efficiency). 
 
 Here is a more constructive view of **sampling distribution**:
 
@@ -182,7 +184,13 @@ $$\hat{\lambda}_i(\mathcal D_i)$$
 
 The empirical distribution 
 
-$$\{\hat \lambda_i\}$$ is the sampling distribution; we can empirically verify that the empirical distribution converge to the Gaussian distribution derived above.
+$$\{\hat \lambda_i\}$$ is the sampling distribution. 
+
+
+A **key take-away** message is the sampling distribution (or all frequentist's hypothesis testing, credible intervals) is about the estimator $\hat\lambda$ rather than the unknown parameter $\lambda$. From frequentist perspective, the unknown parameter $\lambda$ is a fixed constant, i.e. there is no uncertainty about $\lambda$; but there is indeed uncertainty surrounding its estimator $\hat\lambda$.
+
+
+We can empirically verify that the empirical distribution indeed converges to the Gaussian distribution derived above. What we really doing below is nothing but verifying the famous Large Number Theory. 
 """
 
 # ╔═╡ 429ca1cd-435f-4ace-928e-bf165e15a0da
@@ -202,16 +210,13 @@ end
 # ╔═╡ 097342e8-3ffd-4ddb-a601-a8f86d727033
 begin
 	λ_ = 10
-	n_ = 20
+	n_ = 10
 	times = 5000
 	λ̂s = sampling_dist_poisson(λ_, n_, times)
 	h = fit(Histogram, λ̂s, nbins=25)
-	plot(normalize(h, mode=:pdf))
-	plot!(2:0.1:18, (x) ->  pdf(Normal(λ_, λ_/n_), x))
+	plot(normalize(h, mode=:pdf), label="Empirical")
+	plot!(2:0.1:18, (x) ->  pdf(Normal(λ_, λ_/n_), x), label="Theoretical")
 end
-
-# ╔═╡ a7956a25-d94e-4449-b440-1ef14f51f449
-λ̂s
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -423,7 +428,7 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.5"
 
 [[Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
 [[EarCut_jll]]
@@ -461,9 +466,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
 uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
 version = "3.3.10+0"
-
-[[FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -1391,7 +1393,6 @@ version = "0.9.1+5"
 # ╠═9cac6465-fa27-4a7b-8e2c-714202fe25c5
 # ╟─451271bb-4ead-4a4f-9830-d6702a5face2
 # ╠═429ca1cd-435f-4ace-928e-bf165e15a0da
-# ╠═097342e8-3ffd-4ddb-a601-a8f86d727033
-# ╠═a7956a25-d94e-4449-b440-1ef14f51f449
+# ╟─097342e8-3ffd-4ddb-a601-a8f86d727033
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
