@@ -43,17 +43,17 @@ md"""
 
 ## Part 1. Basis expansion and regularisation
 
-*Fixed basis expansion* (read Chapter 7.2 of MLAPP or Bishop's chapter 3) can be viewed as a Neural Net's hidden layer. The difference is: the hidden layer do not change or assumed known for the fixed basis expansion model. In other words, when you apply gradient descent for the neural net, the gradient back-propogation stops at the second last layer. And there is no fundamental difference between these two. Also check [Lecture 18 Neural Networks](https://studres.cs.st-andrews.ac.uk/2020_2021/CS5014/Lectures/CS5014_L18_Neural_Network.pdf) to see the connection.
+*Fixed basis expansion* (read Chapter 7.2 of MLAPP or Bishop's chapter 3) can be viewed as a Neural Net's hidden layer. The difference is: the hidden layer does not change or assumed known for the fixed basis expansion model. In other words, when you apply gradient descent for the neural net, the gradient back-propogation stops at the second last layer. And there is no fundamental difference between these two. Also check [Lecture 18 Neural Networks](https://studres.cs.st-andrews.ac.uk/2020_2021/CS5014/Lectures/CS5014_L18_Neural_Network.pdf) to see the connection.
 
 1. Consider the following regression dataset with $N=50$ observations, and `xsamples` as input and `ts` as targets. Apply Radial basis function (RBF) to expand the design matrix from $R^1$ to $R^{50}:$ $$\text{rbf}(x; \mu, \sigma) = \text{exp}\left (- \frac{(x-\mu)^2}{2\sigma^2}\right ),$$
    * choose the expansion locations as `xsamples`
    * and fix $\sigma^2 = 0.5$
 
 2. Fit the regression by using MLE (do not forget the intercept term) and 
-3. Add a zero Gaussian prior (assume the variance is say 1.0 but code it as a input parameter), find the posterior distribution
+3. Add a zero mean Gaussian prior (assume the variance is say 1.0 but implement it as an input parameter), find the posterior distribution
    * also find the MAP or ridge regression
-4. Compare MLE and Bayesian's prediction; which one is better
-5. Now optimise the prior distribution's variance (or precision) by evidence procedure (7.6.4). And compare with previous methods. 
+4. Compare MLE and Bayesian's prediction; which one is better ?
+5. Now optimise the prior distribution's variance (or precision) by evidence procedure (Chapter 7.6.4 of MLAPP). And compare with previous methods. 
 """
 
 # ╔═╡ daa993ca-12fd-4d9b-936b-d16bdcc72571
