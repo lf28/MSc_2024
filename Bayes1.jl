@@ -90,7 +90,7 @@ end
 
 # ╔═╡ 5ccb02ce-2965-4144-9bc5-89bf7079d365
 md"""
-## Part 1: Regularisation
+## Part 2: Regularisation
 
 Frequentist ML deals with overfitting by adding a penalty term to the loss. It actually corresponds to optimising a posterior distribution, which has its root in Bayesian inference:
 
