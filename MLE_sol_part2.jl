@@ -212,7 +212,7 @@ $\boldsymbol{\Sigma}_{\hat{\beta}} = (\boldsymbol{X}^\top \boldsymbol{X})^{-1}\b
 
 Note its relationship to the Hessian: the sampling distribution's variance is the negative Hessian's inverse.
 
-It is called the **sampling distribution** of the ML estimator. It means if you repeat the same procedure a lot of times, say 2000 times: i.e. collect $m$-observation sample of $X,y$ and calculate its ML estimator. If you collect all 2000 ML estimators, the distribution will be exactly the sampling distribution, a multivariate Gaussian with prescribed mean and covariance.
+It is called the **sampling distribution** of the ML estimator. It means if you repeat the same procedure a lot of times, say 2000 times: i.e. collect $n$-observation sample of $X,y$ and calculate its ML estimator. If you collect all 2000 ML estimators, the distribution will be exactly the sampling distribution, a multivariate Gaussian with prescribed mean and covariance.
 
 We can empirically verify the claim by simulation. The following method simulates random observation $\boldsymbol{y}$ based on the linear regression model, then calculates and returns the ML estimator. We repeat the process $mc$ times to obtain supposed samples from the sampling distribution.
 """
