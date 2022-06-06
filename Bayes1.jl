@@ -24,7 +24,7 @@ end
 # ╔═╡ 50543548-e5a5-11ec-321f-d79ad6c55db1
 md"""
 
-# A prime in Bayesian inference (1)
+# A primer on Bayesian inference (1)
 
 **Abstract** *We are going to see how Bayesian inference deals with some typical learning tasks; and how Bayesian inference provides an alternative and more attractive solutions that are usually more* 
 - *numerical-stable,*
