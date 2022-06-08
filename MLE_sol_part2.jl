@@ -424,13 +424,13 @@ $$\frac{\partial L}{\partial \boldsymbol{\beta}} = \sum_{i=1}^n (y_i-\sigma_i) x
 
 The $j$-th partial derivative is just the $j$-th entry of the gradient
 
-$$\frac{\partial L}{\partial \beta_j} = \left [\frac{\partial L}{\partial \boldsymbol{\beta}}\right ]_j = \tilde{\boldsymbol{x}}_j^\top (\boldsymbol{y} - \boldsymbol{\sigma})=\begin{bmatrix} x_{1,j} & x_{2,j} & \ldots & x_{n,j}\end{bmatrix} \begin{bmatrix} y_1 - \sigma(\boldsymbol{x}_1^\top \boldsymbol{\beta})\\ y_2 - \sigma(\boldsymbol{x}_2^\top \boldsymbol{\beta})\\ \vdots \\y_m - \sigma(\boldsymbol{x}_n^\top \boldsymbol{\beta})\end{bmatrix},$$ where $\tilde{\boldsymbol{x}}_j$ is the $j$-th column of $X$, or the $j$-th feature across all $n$ observations. 
+$$\frac{\partial L}{\partial \beta_j} = \left [\frac{\partial L}{\partial \boldsymbol{\beta}}\right ]_j = \tilde{\boldsymbol{x}}_j^\top (\boldsymbol{y} - \boldsymbol{\sigma})=\begin{bmatrix} x_{1,j} & x_{2,j} & \ldots & x_{n,j}\end{bmatrix} \begin{bmatrix} y_1 - \sigma(\boldsymbol{x}_1^\top \boldsymbol{\beta})\\ y_2 - \sigma(\boldsymbol{x}_2^\top \boldsymbol{\beta})\\ \vdots \\y_n - \sigma(\boldsymbol{x}_n^\top \boldsymbol{\beta})\end{bmatrix},$$ where $\tilde{\boldsymbol{x}}_j$ is the $j$-th column of $X$, or the $j$-th feature across all $n$ observations. 
 
 $$\frac{\partial^2 L}{\partial \beta_i \partial \beta_j} = \frac{\partial }{\partial \beta_i}\frac{\partial L}{\partial \beta_j} =\sum_{k=1}^n \frac{\partial (x_{k,j}\cdot (y_k - \sigma(\boldsymbol{x}_k^\top \boldsymbol{\beta})))}{\partial \beta_i} = \sum_{k=1}^n -x_{k,j} \cdot \sigma_k (1-\sigma_k) \cdot x_{k,i},$$
 
 which can be compactly written as $\boldsymbol{X}^\top \boldsymbol{D} \boldsymbol{X},$ where $\boldsymbol{D} = \text{diag} (\sigma_k(\sigma_k-1))$ for $k =1,\ldots,n$.
 
-To see this, note that $(\boldsymbol{X}^\top \boldsymbol{X})_{i,j} = \sum_{k=1}^n x_{k,i}x_{k,j}$ i.e. inner product between $i,j$-th features across m observations. By multiplying a diagonal matrix in between, we multiply each product item a weight (with the corresponding diagonal entry of $\boldsymbol{D}$).
+To see this, note that $(\boldsymbol{X}^\top \boldsymbol{X})_{i,j} = \sum_{k=1}^n x_{k,i}x_{k,j}$ i.e. inner product between $i,j$-th features across $n$ observations. By multiplying a diagonal matrix in between, we multiply each product item a weight (with the corresponding diagonal entry of $\boldsymbol{D}$).
 
 """
 
