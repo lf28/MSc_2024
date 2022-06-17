@@ -13,6 +13,7 @@ begin
 	using ForwardDiff
 	# using PyPlot
 	using Plots
+	
 	using StatsPlots
 	# using PlotlyBase
 	# import PlotlyJS:savefig
@@ -1364,7 +1365,7 @@ version = "0.9.1+5"
 # ╟─a5aeae12-cb6a-42ad-ba10-08c2291edbba
 # ╟─50543548-e5a5-11ec-321f-d79ad6c55db1
 # ╟─3914c205-dd87-435a-8402-dc85bfed143d
-# ╠═daa993ca-12fd-4d9b-936b-d16bdcc72571
+# ╟─daa993ca-12fd-4d9b-936b-d16bdcc72571
 # ╠═95607851-c454-4e89-8ec0-ffb20750e351
 # ╟─5ccb02ce-2965-4144-9bc5-89bf7079d365
 # ╟─2d7f403e-4647-4c34-b9c8-f617c78eb8c3
