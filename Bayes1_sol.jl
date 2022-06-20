@@ -185,11 +185,11 @@ md"""
 
 To minimise the loss (or maximise the log posterior), take derivative and set to zero we have:
 
-$$\frac{\partial L}{\partial \theta} = - \frac{1}{\sigma^2} X^\top(\mathbf y-\Phi\theta) + \frac{1}{\lambda^2}\theta =0$$
+$$\frac{\partial L}{\partial \theta} = - \frac{1}{\sigma^2} \Phi^\top(\mathbf y-\Phi\theta) + \frac{1}{\lambda^2}\theta =0$$
 
 $$\begin{align}&\Rightarrow - \frac{1}{\sigma^2} \Phi^\top \mathbf y+\frac{1}{\sigma^2}  \Phi^\top \Phi\theta + \frac{1}{\lambda^2}\theta =0\\
 &\Rightarrow \left (\frac{1}{\sigma^2}\Phi^\top \Phi + \frac{1}{\lambda^2}I\right)\theta = \frac{1}{\sigma^2} \Phi^\top \mathbf y \\
-&\Rightarrow \theta_{MAP} = \left (\frac{1}{\sigma^2}\Phi^\top \Phi + \frac{1}{\lambda^2}I\right)^{-1}\frac{1}{\sigma^2} \Phi^\top \mathbf y
+&\Rightarrow \theta_{\text{MAP}} = \left (\frac{1}{\sigma^2}\Phi^\top \Phi + \frac{1}{\lambda^2}I\right)^{-1}\frac{1}{\sigma^2} \Phi^\top \mathbf y
 \end{align}$$
 
 If we set the penalty coefficient $\frac{1}{\lambda^2}=0$, we recover the MLE. 
@@ -243,7 +243,7 @@ plot(-logPosts, label="Neg log post")
 θₘₐₚ(Φ, t, σ², λ²) = inv( (1/σ²) * Φ'*Φ + (1/λ²) * I) * (1/σ²)*Φ'*t
 
 # ╔═╡ 382ac7f8-8814-4e12-a617-8f31704b8a3c
-@bind λ² Slider([(0.001:1.0:500)..., Inf])
+@bind λ² Slider([(0.001:1.0:500)..., Inf], default=10.0)
 
 # ╔═╡ 2bdd44ed-004f-4444-a552-181711176ac8
 θ_ridge =θₘₐₚ(Φ, ts, σ²_, λ²)
@@ -761,9 +761,9 @@ end
 # ╔═╡ ec23667b-13c5-4ced-b218-215b846825fc
 begin
 	plotly()
-	plot(wws[1,1:5:end], label="w0")
-	plot!(wws[2,1:5:end], label="w1")
-	plot!(wws[3,1:5:end], label ="w2")
+	plot(wws[1,1:5:end], label="β₀")
+	plot!(wws[2,1:5:end], label="β₁")
+	plot!(wws[3,1:5:end], label ="β₂")
 end
 
 # ╔═╡ e6e48303-ef1d-4e8d-84c9-077b693fd39b
@@ -802,7 +802,7 @@ PlutoUI.Resource("https://i.imgur.com/8V5pwwa.gif")
 
 # ╔═╡ 14d4ed18-4fa5-4237-a57e-08014f4c589d
 begin
-	plot(mle_history, label="MLE")
+	plot(mle_history, label="MLE", title="Newton's method's negative loss", xlab="Iteration", ylabel="negative loss")
 	plot!(l2_history, label="MAP")
 end
 
@@ -834,12 +834,12 @@ wwₗ₂
 # ╔═╡ 615d7bd8-e388-46eb-9860-deff32126b6b
 begin
 	plotly()
-	plot(wws[1,1:5:end], label="w0")
-	plot!(wwsₗ₂[1,1:5:end], label="w0ₗ₂")
-	plot!(wws[2,1:5:end], label="w1")
-	plot!(wwsₗ₂[2,1:5:end], label="w1ₗ₂")
-	plot!(wws[3,1:5:end], label ="w2")
-	plot!(wwsₗ₂[3,1:5:end], label ="w2ₗ₂")
+	plot(wws[1,1:5:end], color =:red, linestyle =:dot, label="β₀ (ML)")
+	plot!(wwsₗ₂[1,1:5:end], color =:blue, linestyle =:dot, label="β₀ (MAP)")
+	plot!(wws[2,1:5:end], color =:red,linestyle =:dash,label="β₁ (ML)")
+	plot!(wwsₗ₂[2,1:5:end], color =:blue,linestyle =:dash,label="β₁ (MAP)")
+	plot!(wws[3,1:5:end], color =:red,linestyle =:dashdot,label ="β₂ (ML)")
+	plot!(wwsₗ₂[3,1:5:end], color =:blue,linestyle =:dashdot,label ="β₂ (MAP)")
 end
 
 # ╔═╡ d347a153-ee3d-4265-aa24-7b0cda95fcb3
