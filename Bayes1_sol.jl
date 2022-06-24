@@ -587,6 +587,12 @@ md"""
 
 """
 
+# ╔═╡ 28f77fb7-429c-43b3-97ce-ef1d9f62b820
+begin
+	x1 = range(1, stop=10, length=100)
+	x2 = range(1, stop=10, length=100)
+end;
+
 # ╔═╡ 7cdbd3cd-2fd4-4962-9c66-b3aff7559fc7
 md"""
 **Solution**
@@ -770,8 +776,6 @@ end
 begin
 	plotly()
 	logReg(x, w, w0) = logistic(x' * w + w0)	
-	x1 = range(1, stop=10, length=100)
-	x2 = range(1, stop=10, length=100)
 	plot(x1, x2, (xx1,xx2)-> logReg([xx1, xx2], ww[2:3], ww[1]), st=:contour, legend = false, label="contour of the prediction")
 end
 
@@ -2406,6 +2410,7 @@ version = "0.9.1+5"
 # ╟─becbf88b-47cd-4d06-a4dd-56cbddc96dd6
 # ╟─41a5e342-eb5a-4ff7-847d-72c0e0ee96f4
 # ╟─08e51e0e-d4c5-4464-82cb-105e81b527d9
+# ╠═28f77fb7-429c-43b3-97ce-ef1d9f62b820
 # ╟─7cdbd3cd-2fd4-4962-9c66-b3aff7559fc7
 # ╠═d3caa211-322b-4f27-9e4a-b5aa18181b11
 # ╟─cab19a19-2736-4b36-98be-12b0da0976ab
@@ -2421,12 +2426,12 @@ version = "0.9.1+5"
 # ╠═e66e149b-4c0a-4ecb-b793-d270777ab1a2
 # ╟─ce736d70-6e43-4595-bf90-bea0497e0655
 # ╟─ec23667b-13c5-4ced-b218-215b846825fc
-# ╟─e6e48303-ef1d-4e8d-84c9-077b693fd39b
+# ╠═e6e48303-ef1d-4e8d-84c9-077b693fd39b
 # ╠═b565f3dd-6f3d-4a9f-9e25-7038ced1b378
 # ╟─0c57e155-40e1-4e5c-9960-66c2fe1d7e86
 # ╟─8a1b9517-5645-42e0-8e39-17f0d66ec7b1
 # ╠═a061819a-391a-405b-b833-a398e3d279d1
-# ╟─cfdae888-3226-4230-979a-b02dd5b31ecd
+# ╠═cfdae888-3226-4230-979a-b02dd5b31ecd
 # ╟─14d4ed18-4fa5-4237-a57e-08014f4c589d
 # ╠═afb1343d-06c6-4450-be00-fee1e6ca1f44
 # ╠═d4d02d50-376c-4bec-a72f-35d5d57eda2c
@@ -2439,8 +2444,8 @@ version = "0.9.1+5"
 # ╠═50e605ea-37b3-49ec-802f-9f7a7bf04a20
 # ╠═53047746-8e91-4899-9441-2d2127ffe7f2
 # ╟─5b648ec8-d3fd-48cf-9ec4-083eb0363303
-# ╟─165ccdf9-ae5b-42c9-b372-ef8676a07697
-# ╟─d348d150-be97-43fc-a9ca-dc3e9e6960af
-# ╟─1cba7665-1745-49e6-8fb6-72d6373b7d3f
+# ╠═165ccdf9-ae5b-42c9-b372-ef8676a07697
+# ╠═d348d150-be97-43fc-a9ca-dc3e9e6960af
+# ╠═1cba7665-1745-49e6-8fb6-72d6373b7d3f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
