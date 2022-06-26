@@ -38,11 +38,11 @@ $$w^{(i)} \sim \tilde p(w,\mathcal D)\triangleq p(w)p(\mathcal D|w),$$
 *Markov Chain Monte Carlo (MCMC) samplers can be applied to efficiently draw (non-independent yet complying) samples from the posterior. Note the normalising constant is not required in MCMC samplers. As a result, all inference questions becomes Monte Carlo estimation.*
 
 
-*This time, we will see the problem can be solved by an optimisation approach, called **variational inference** in machine learning community. In a nutshell, we aim to find an approximating posterior (with simplified structure) $q(w)$ that is as close to the true posterior $p(w|\mathcal D)$ as possible:*
+*This time, we will see how the problem can be reduced to an optimisation problem. And the technique is called **variational inference** in machine learning community. In a nutshell, we aim to find an approximating posterior (with simplified structure) $q(w)$ that is as close to the true posterior $p(w|\mathcal D)$ as possible:*
 
-$$q(w; \theta) \leftarrow \arg\min_{\theta} \textit{d}(q(w), p(w|\mathcal D)),$$
+$$q(w; \psi) \leftarrow \arg\min_{\psi} \textit{d}(q(w), p(w|\mathcal D)),$$
 
-A typical choice for the distance measure is KL divergence. As the problem has been reduced to an optimisation problem, the inference becomes much faster and scalable than MCMC based approaches. 
+*A typical choice for the distance measure is KL divergence. As the problem has been reduced to an optimisation problem, the inference becomes more computationally efficient and scalable than MCMC based approaches.*
 
 You should read the following book chapters and notes
 - MLAPP Chapter 21.1, 21.2, 21.3.1, 21.5
@@ -76,10 +76,10 @@ $$q(w_i) = E_{\{w_{j, j\neq i}\}}[\ln p(\mathcal D, w)].$$
 
 Consider the full Bayesian model for the fixed bases expansion model: i.e. given fixed basis expanded design matrix $\Phi$, and targets $\mathbf y$, the observations are of Gaussian form with noise level $\sigma^2 = 1/\beta$, 
 
-$$p(\mathbf y| \Phi, \mathbf w,\beta) = N(\Phi \mathbf w, \beta^{-1}\mathbf I_{N})$$
+$$p(\mathbf y| \Phi, \boldsymbol \theta,\beta) = N(\Phi \boldsymbol \theta, \beta^{-1}\mathbf I_{N})$$
 and we further impose the following (hyper-)priors on the unknown parameters: 
 
-$p(\mathbf w) = N(0, \alpha^{-1} \mathbf I_D),$
+$p(\boldsymbol \theta) = N(0, \alpha^{-1} \mathbf I_D),$
 
 $$p(\alpha) = \text{Gamma}(a_0, b_0) = \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha^{a_0-1} e^{-b_0 \alpha}$$
 
@@ -128,7 +128,7 @@ md"""
 
 ## Part 3. Fixed form VI or pathwise gradient
 
-Read Iain Murray's notes on VI. He has also provided a Python implementation for any general fixed form VI problem. Inspect and understand the code. 
+Read Iain Murray's notes on VI. He has also provided a Python implementation for a general fixed form VI inference problem. Inspect and understand the code. Port the implementation to Julia.
 
 
 1. use fixed form VI to solve the above fixed basis expansion regression problem. 
