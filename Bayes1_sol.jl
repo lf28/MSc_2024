@@ -636,8 +636,8 @@ We only need to find the gradient and Hessian of the prior and add them to the l
 
 The prior is a Gaussian with mean and variance $m_0, C_0$, therefore
 
-$$\begin{align}\ln p(\boldsymbol \beta) &= \ln\left \{\frac{1}{\sqrt{(2\pi)^d |C_0|}} \text{exp}\left (-\frac{1}{2}(\boldsymbol \beta^\top -m_0)^\top C_0^{-1}(\boldsymbol \beta -m_0) \right )\right \} \\
-&= -\frac{d}{2} \ln 2\pi -\frac{1}{2}\ln |C_0|-\frac{1}{2}(\boldsymbol \beta^\top -m_0)^\top C_0^{-1}(\boldsymbol \beta -m_0) 
+$$\begin{align}\ln p(\boldsymbol \beta) &= \ln\left \{\frac{1}{\sqrt{(2\pi)^d |C_0|}} \text{exp}\left (-\frac{1}{2}(\boldsymbol \beta -m_0)^\top C_0^{-1}(\boldsymbol \beta -m_0) \right )\right \} \\
+&= -\frac{d}{2} \ln 2\pi -\frac{1}{2}\ln |C_0|-\frac{1}{2}(\boldsymbol \beta -m_0)^\top C_0^{-1}(\boldsymbol \beta -m_0) 
 \end{align}$$
 
 Therefore,
