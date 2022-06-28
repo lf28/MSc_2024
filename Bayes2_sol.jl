@@ -218,21 +218,27 @@ md"""
 
 Consider regression with fixed basis expansion problem, we introduce a prior on the regression parameter 
 
-$p(\theta|\lambda^2)=N(0, \lambda^2 I_d);$ together with the likelihood 
+$p(\theta|\boldsymbol \lambda^2)=N(\mathbf 0, \text{diag}(\boldsymbol \lambda^2))=\prod_{d=1}^D N(\theta_d; 0, \lambda_d^2) ;$ 
 
-$$p(\mathbf y|\Phi, \theta, \sigma^2) = N(\mathbf y; \Phi\theta, \sigma^2I_N)$$
+
+Note that there is a sutble difference between the this model and the one we discussed last time. Here we have assumed each dimension of the regression parameter $\theta_d$ has its own variance parameter $\lambda_d$ for $d=1,\ldots, D$ rather than a shared precision $\lambda$. 
+
+Together with the likelihood 
+
+$$p(\mathbf y|\Phi, \theta, \sigma^2) = N(\mathbf y; \Phi \theta, \sigma^2I_N)$$
 
 The posterior becomes:
 
-$$p(\theta|\lambda^2, \sigma^2, \Phi, \mathbf y) = \frac{p(\theta|\lambda^2)p(\mathbf y|\Phi, \theta, \sigma^2)}{p(\mathbf y|\sigma^2, \lambda^2 )}$$
+$$p(\theta|\boldsymbol \lambda^2, \sigma^2, \Phi, \mathbf y) = \frac{p(\theta|\boldsymbol \lambda^2)p(\mathbf y|\Phi,  \theta, \sigma^2)}{p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )}$$
 
-To deal with the $\lambda^2, \sigma^2$, evidence procedure assumes they are hyperparameters and optimise them by maximum likelihood method (known Type-II MLE in literature) 
+To deal with the $\boldsymbol \lambda^2, \sigma^2$, evidence procedure assumes they are hyperparameters and optimise them by maximum likelihood method (known Type-II MLE in literature) 
 
-$$\sigma^2_{\text{ML}} , \lambda^2_{\text{ML}} \triangleq \arg\max_{\lambda^2, \sigma^2} \ln p(\mathbf y|\sigma^2, \lambda^2 )$$
+$$\sigma^2_{\text{ML}} , \boldsymbol \lambda^2_{\text{ML}} \triangleq \arg\max_{\lambda^2, \sigma^2} \ln p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )$$
 
-We can, however, deal with the problem in a full Bayesian way. That is to assume they are unknown **random variables** as well and impose priors on them. For convenience, assume the following priors for the two precision parameters $\alpha\triangleq 1/\lambda^2, \beta \triangleq 1/\sigma^2$:
 
-$$p(\alpha) = \text{Gamma}(a_0, b_0) = \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha^{a_0-1} e^{-b_0 \alpha}$$
+We can, however, deal with the problem in a full Bayesian way. That is to assume they are unknown **random variables** as well and impose priors on them. For convenience, assume the following priors for the two precision parameters $\alpha_d\triangleq 1/\lambda_d^2, \beta \triangleq 1/\sigma^2$:
+
+$$p(\boldsymbol \alpha) = \prod_d p(\alpha_d) = \prod_d \text{Gamma}(\alpha_d; a_0, b_0) = \prod_{d=1}^D \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d}$$
 
 $$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1} e^{-d_0 \beta}$$
 
@@ -247,7 +253,7 @@ $$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1}
 # ╔═╡ 3050acb3-ad34-415a-920c-7825a801549a
 md"""
 **solution**
-1) $p(\theta, \alpha, \beta, \mathbf y|\Phi) = p(\alpha)p(\beta)p(\theta|\alpha)p(\mathbf y|\Phi, \theta, \beta)$
+1) $p(\theta, \boldsymbol \alpha, \beta, \mathbf y|\Phi) = p(\boldsymbol \alpha)p(\beta)p(\theta|\boldsymbol \alpha)p(\mathbf y|\Phi, \theta, \beta)$
 """
 
 # ╔═╡ fe23fd04-e7f0-4a93-8bf5-38146f8dac11
@@ -256,17 +262,29 @@ md"""
 
 the full conditional for $\theta$:
 
-$$p(\theta|\alpha, \beta, \Phi, \mathbf y) \propto \cancel{p(\alpha) p(\beta)} p(\theta|\alpha) p(\mathbf y|\Phi, \theta, \beta)$$
+$$p(\theta|\boldsymbol \alpha, \beta, \Phi, \mathbf y) \propto \cancel{p(\boldsymbol \alpha) p(\beta)} p(\theta|\boldsymbol \alpha) p(\mathbf y|\Phi, \theta, \beta)$$
 
 
-the full conditional for $\alpha$:
+the full conditional for $\boldsymbol \alpha$:
 
-$$p(\alpha|\theta, \beta, \Phi, \mathbf y) \propto {p(\alpha)} \cancel{p(\beta)} p(\theta|\alpha) \cancel{p(\mathbf y|\Phi, \theta, \beta)} = \text{Gamma}(\cdot, \cdot)$$
+$$\begin{align}p(\boldsymbol \alpha|\theta, \beta, \Phi, \mathbf y) &\propto {p(\boldsymbol \alpha)} \cancel{p(\beta)} p(\theta|\boldsymbol \alpha) \cancel{p(\mathbf y|\Phi, \theta, \beta)} \\
+&= \prod_d \text{Gamma}(\alpha_d; a_0, b_0)\prod_{d} N(\theta_d; 0, \lambda_d^2)\\
+&= \prod_d \text{Gamma}(\alpha_d; a_0, b_0)N(\theta_d; 0, \lambda_d^2) \\
+&= \prod_d  \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d} \frac{1}{\sqrt{2\pi} } \alpha_d^{\frac{1}{2}} e^{-\frac{\alpha_d\theta_d^2}{2} } \\
+&\propto \prod_d \cancel{\frac{b_0^{a_0}}{\Gamma(a_0)} }\alpha_d^{a_0-1} e^{-b_0 \alpha_d} \cancel{\frac{1}{\sqrt{2\pi} } }\alpha_d^{\frac{1}{2}} e^{-\frac{\alpha_d\theta_d^2}{2} }\\
+&= \prod_d \alpha_d^{a_0+\frac{1}{2} -1 } e^{-(b_0 + \frac{\theta_d^2}{2})\alpha_d} \\
+&= \prod_d \text{Gamma}(\alpha_d; a_d, b_d),
+\end{align}$$
+where 
 
-the full conditional for $\beta$:
+$a_d = a_0 + \frac{1}{2}, \; b_d = b_0 + \frac{\theta_d^2}{2}.$
 
-$$p(\beta|\theta, \alpha, \Phi, \mathbf y) \propto \cancel{p(\alpha)} {p(\beta)} \cancel{p(\theta|\alpha)} {p(\mathbf y|\Phi, \theta, \beta)} = \text{Gamma}(\cdot, \cdot)$$
 
+The full conditional for $\beta$:
+
+$$p(\beta|\theta, \boldsymbol \alpha, \Phi, \mathbf y) \propto \cancel{p(\alpha)} {p(\beta)} \cancel{p(\theta|\boldsymbol \alpha)} {p(\mathbf y|\Phi, \theta, \beta)} = \text{Gamma}(\cdot, \cdot),$$
+
+The derivation is left as an exercise. 
 
 
 """

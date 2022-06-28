@@ -95,21 +95,27 @@ md"""
 
 Consider regression with fixed basis expansion problem, we introduce a prior on the regression parameter 
 
-$p(\theta|\lambda^2)=N(0, \lambda^2 I_d);$ together with the likelihood 
+$p(\boldsymbol \theta|\boldsymbol \lambda^2)=N(\mathbf 0, \text{diag}(\boldsymbol \lambda^2))=\prod_{d=1}^D N(\theta_d; 0, \lambda_d^2) ;$ 
 
-$$p(\mathbf y|\Phi, \theta, \sigma^2) = N(\mathbf y; \Phi\theta, \sigma^2I_N)$$
+
+Note that there is a sutble difference between the this model and the one we discussed last time. Here we have assumed each dimension of the regression parameter $\theta_d$ has its own variance parameter $\lambda_d$ for $d=1,\ldots, D$ rather than a shared precision $\lambda$. 
+
+Together with the likelihood 
+
+$$p(\mathbf y|\Phi, \boldsymbol \theta, \sigma^2) = N(\mathbf y; \Phi\boldsymbol \theta, \sigma^2I_N)$$
 
 The posterior becomes:
 
-$$p(\theta|\lambda^2, \sigma^2, \Phi, \mathbf y) = \frac{p(\theta|\lambda^2)p(\mathbf y|\Phi, \theta, \sigma^2)}{p(\mathbf y|\sigma^2, \lambda^2 )}$$
+$$p(\theta|\boldsymbol \lambda^2, \sigma^2, \Phi, \mathbf y) = \frac{p(\theta|\boldsymbol \lambda^2)p(\mathbf y|\Phi, \boldsymbol \theta, \sigma^2)}{p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )}$$
 
-To deal with the $\lambda^2, \sigma^2$, evidence procedure assumes they are hyperparameters and optimise them by maximum likelihood method (known Type-II MLE in literature) 
+To deal with the $\boldsymbol \lambda^2, \sigma^2$, evidence procedure assumes they are hyperparameters and optimise them by maximum likelihood method (known Type-II MLE in literature) 
 
-$$\sigma^2_{\text{ML}} , \lambda^2_{\text{ML}} \triangleq \arg\max_{\lambda^2, \sigma^2} \ln p(\mathbf y|\sigma^2, \lambda^2 )$$
+$$\sigma^2_{\text{ML}} , \boldsymbol \lambda^2_{\text{ML}} \triangleq \arg\max_{\lambda^2, \sigma^2} \ln p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )$$
 
-We can, however, deal with the problem in a full Bayesian way. That is to assume they are unknown **random variables** as well and impose priors on them. For convenience, assume the following priors for the two precision parameters $\alpha\triangleq 1/\lambda^2, \beta \triangleq 1/\sigma^2$:
 
-$$p(\alpha) = \text{Gamma}(a_0, b_0) = \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha^{a_0-1} e^{-b_0 \alpha}$$
+We can, however, deal with the problem in a full Bayesian way. That is to assume they are unknown **random variables** as well and impose priors on them. For convenience, assume the following priors for the two precision parameters $\alpha_d\triangleq 1/\lambda_d^2, \beta \triangleq 1/\sigma^2$:
+
+$$p(\boldsymbol \alpha) = \prod_d p(\alpha_d) = \prod_d \text{Gamma}(\alpha_d; a_0, b_0) = \prod_{d=1}^D \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d}$$
 
 $$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1} e^{-d_0 \beta}$$
 
@@ -1372,7 +1378,7 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╠═a5aeae12-cb6a-42ad-ba10-08c2291edbba
+# ╟─a5aeae12-cb6a-42ad-ba10-08c2291edbba
 # ╟─50543548-e5a5-11ec-321f-d79ad6c55db1
 # ╟─5ccb02ce-2965-4144-9bc5-89bf7079d365
 # ╟─2d7f403e-4647-4c34-b9c8-f617c78eb8c3

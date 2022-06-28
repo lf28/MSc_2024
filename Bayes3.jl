@@ -76,12 +76,12 @@ $$q(w_i) = E_{\{w_{j, j\neq i}\}}[\ln p(\mathcal D, w)].$$
 
 Consider the full Bayesian model for the fixed bases expansion model: i.e. given fixed basis expanded design matrix $\Phi$, and targets $\mathbf y$, the observations are of Gaussian form with noise level $\sigma^2 = 1/\beta$, 
 
-$$p(\mathbf y| \Phi, \boldsymbol \theta,\beta) = N(\Phi \boldsymbol \theta, \beta^{-1}\mathbf I_{N})$$
+$$p(\mathbf y| \Phi,  \theta,\beta) = N(\Phi  \theta, \beta^{-1}\mathbf I_{N})$$
 and we further impose the following (hyper-)priors on the unknown parameters: 
 
-$p(\boldsymbol \theta) = N(0, \alpha^{-1} \mathbf I_D),$
+$p(\theta) = N(\boldsymbol 0, \text{diag}(\boldsymbol \alpha)^{-1}) = \prod_{d=1}^D N(\theta_d; 0, \alpha_d^{-1})$
 
-$$p(\alpha) = \text{Gamma}(a_0, b_0) = \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha^{a_0-1} e^{-b_0 \alpha}$$
+$$p(\boldsymbol \alpha) = \prod_d p(\alpha_d) = \prod_d \text{Gamma}(\alpha_d; a_0, b_0) = \prod_{d=1}^D \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d}$$
 
 $$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1} e^{-d_0 \beta}$$
 
