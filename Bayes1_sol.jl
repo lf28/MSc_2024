@@ -329,7 +329,7 @@ $$p(\theta|\Phi, \mathbf y) = N(m_N, C_N)$$ and
 and the matching mean and variance are
 
 $$\begin{cases}
-m_N = -\frac{1}{2} C_N (-2 (m_0^\top C_0^{-1} + y\Sigma^{-1} \Phi )^\top)= C_N( C_0^{-1}m_0 +  \Phi^\top\Sigma^{-1}\mathbf y)\\
+m_N = -\frac{1}{2} C_N (-2 (m_0^\top C_0^{-1} +\mathbf  y\Sigma^{-1} \Phi )^\top)= C_N( C_0^{-1}m_0 +  \Phi^\top\Sigma^{-1}\mathbf y)\\
 C_N = (C_0^{-1} +\Phi^\top \Sigma^{-1} \Phi)^{-1}
 \end{cases}$$
 
@@ -474,7 +474,7 @@ $$\Phi^\top \Phi \boldsymbol v_i =  \nu_i^0 \boldsymbol v_i,$$ therefore
 
 $$\frac{1}{\sigma^2}\Phi^\top \Phi \boldsymbol v_i = \frac{1}{\sigma^2}\nu_i^0 \boldsymbol v_i;$$
 
-We can eigen-decompose $\Phi^\top \Phi$ once and rescale its eigen values. 
+We can pre-compute and cache the eigen-decomposition of $\Phi^\top \Phi$ once and rescale its eigen values later.
 """
 
 # ╔═╡ 95544acb-1cd3-41a6-aafb-43954a957ac6
@@ -528,9 +528,9 @@ where the expectation is taken with the posterior $p(\theta|\Phi, \mathbf y) = N
 
 In the M step, we optimise the expected CDLL w.r.t to $\lambda^2, \sigma^2$. It is left as an exercise to derive and implement the algorithm. You may need the following identity to derive the EM algorithm: 
 
-$$E_{p(\theta|\Phi, \mathbf y)}[\theta^\top \theta] =m_N^\top m_N + C_N;$$ which can be proved as 
+$$E_{p(\theta|\Phi, \mathbf y)}[\theta \theta^\top] =m_N m_N^\top + C_N;$$ which can be proved as 
 
-$$\text{Var}_{p(\theta|\Phi, \mathbf y)}[\theta] = E[\theta^\top\theta] - E[\theta]^\top E[\theta] \Rightarrow  C_N = E[\theta^\top\theta] - m_N^\top m_N\Rightarrow E[\theta^\top\theta] = m_N^\top m_N + C_N$$
+$$\text{Var}_{p(\theta|\Phi, \mathbf y)}[\theta] = E[\theta\theta^\top] - E[\theta] E[\theta]^\top \Rightarrow  C_N = E[\theta\theta^\top] - m_N m_N^\top \Rightarrow E[\theta\theta^\top ] = m_N m_N^\top  + C_N$$
 """
 
 # ╔═╡ becbf88b-47cd-4d06-a4dd-56cbddc96dd6
