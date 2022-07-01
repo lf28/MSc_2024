@@ -4,63 +4,442 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ a5aeae12-cb6a-42ad-ba10-08c2291edbba
+# ╔═╡ 093a22cb-36a4-41d8-9c0e-46cf876192fe
 begin
-	using Zygote, Distributions, DistributionsAD, LinearAlgebra
-	using StatsFuns
-	using Random
-	using FiniteDifferences
+	using Distributions
 	using ForwardDiff
-	# using PyPlot
+	using Zygote
+	using Random
+	using Flux
+	using LinearAlgebra
 	using Plots
+	using StatsPlots
 	using Turing
 	using MCMCChains
-	using StatsPlots
+	using StatsFuns
 	using LaTeXStrings
 	plotly()
 end
 
-# ╔═╡ 50543548-e5a5-11ec-321f-d79ad6c55db1
+# ╔═╡ 51c76828-f55e-11ec-3e26-61ba6bc94c5a
 md"""
 
-# A primer on Bayesian inference (2)
+# A primer on Bayesian inference (3)
 
-**Abstract** *Last time, we have seen how Bayesian approaches usually provide us solutions that are more* 
-- *numerical-stable,*
-- *overfitting-proof,* 
-- *and also more natural inference interpretations.* 
+**Abstract** *We have seen the benefits of Bayesian inference in the past sessions. They are in general more*
+* *numerically stable,* 
+* *natural to interpret and* 
+* *lastly but not least overfitting proof.* 
+*The downside, however, is the computational difficulty of the posterior distributions:*
 
-*However, as shown last time, for most models, Bayesian approach end up with intractable posteriors and intractable integrations. For example, we donot have closed form solution for simple models even like logistic regression. To solve the problem, there are two schools of methods: Markov Chain Monte Carlo (MCMC) sampling based approach, variational inference. We have seen Laplace approximation (which can be viewed as a special way of VI) last time and we will see MCMC this time.*
+$$p(w|\mathcal D) = \frac{p(w) p(\mathcal D|w)}{\int p(w) p(\mathcal D|w) dw}$$
 
-You should read the following chapters. 
-- Information theory, Inference and Learning algorithms (IILA) by David MacKay Chapter 29
-- MLAPP Chapter 24.1, 24.2.1, 24.2.3, 24.3
+*The denominator of the posterior, also known as **normalising constant**, involves a high dimensional integration, which in most cases cannot be computed exactly.*
+
+*Last time, we have seen how the problem can be avoided by using sampling based approach. The idea is to draw samples from the **non-normalised posterior** directly:*
+
+$$w^{(i)} \sim \tilde p(w,\mathcal D)\triangleq p(w)p(\mathcal D|w),$$
+
+*Markov Chain Monte Carlo (MCMC) samplers can be applied to efficiently draw (non-independent yet complying) samples from the posterior. Note the normalising constant is not required in MCMC samplers. As a result, all inference questions becomes Monte Carlo estimation.*
+
+
+*This time, we will see how the problem can be reduced to an optimisation problem. And the technique is called **variational inference** in machine learning community. In a nutshell, we aim to find an approximating posterior (with simplified structure) $q(w)$ that is as close to the true posterior $p(w|\mathcal D)$ as possible:*
+
+$$q(w; \psi) \leftarrow \arg\min_{\psi} \textit{d}(q(w), p(w|\mathcal D)),$$
+
+*A typical choice for the distance measure is KL divergence. As the problem has been reduced to an optimisation problem, the inference becomes more computationally efficient and scalable than MCMC based approaches.*
+
+You should read the following book chapters and notes
+- MLAPP Chapter 21.1, 21.2, 21.3.1, 21.5
+- MLPR by Iain Murray's MLPR course at the University of Edinburgh: [w10b](https://mlpr.inf.ed.ac.uk/2021/notes/w10b_variational_kl.html), [w10c](https://mlpr.inf.ed.ac.uk/2021/notes/w10c_variational_details.html)
 """
 
-# ╔═╡ 5ccb02ce-2965-4144-9bc5-89bf7079d365
+# ╔═╡ f5d9b1cc-63fc-4bdf-9e76-184f8d85cb60
 md"""
-## 1. Metropolis Hastings 
 
-Implement a MH based sampler to infer Bayesian logistic regression model. 
+## Part 1. VI in general
 
-Hint: a good choice for the proposal distribution suggested in (Scott 2009) is 	
+Based on the abstract, by choosing the forward KL divergence as the distance metric to minimise the discrepancy between the variational approximating distribution $q(w)$ and true posterior $p(w|\mathcal D)$, i.e. 
 
+$$d(q, p) = \text{KL}(q\| p),$$
 
-$$q(\theta'|\theta) = N\left (\theta, \left(C_0^{-1} + \frac{6}{\pi^2} \mathbf X^\top \mathbf X\right)^{-1}\right),$$
-   where $C_0$ is the prior's variance: 
-
-$$p(\theta)= N(m_0, C_0),$$ and $m_0=\mathbf 0$ to achieve some shrinkage effect.
-
-
-What do you observe if we use the prior as the Gaussian proposal ?, i.e.
-
-$$q(\theta'|\theta) = N(m_0, C_0)$$
-
-what do you observe ?
+1. how VI avoids finding the normalising constant explicitly ?
+2. what is evidence lower bound (ELBO) ?
 
 """
 
-# ╔═╡ 2d7f403e-4647-4c34-b9c8-f617c78eb8c3
+# ╔═╡ 06250275-93d3-4004-b2c5-37bc093a6dcb
+md"""
+**Solution:**
+
+First a few notations, 
+
+$$p(w|\mathcal D) = \frac{1}{Z_0} p(w, \mathcal D),$$ 
+
+where 
+
+$Z_0\triangleq p(\mathcal D) =\int p(w, \mathcal D) dw$ is the normalising constant. 
+
+
+To minimise the forward KL between $q(w)$ and $p(w|\mathcal D)$:
+
+$$\begin{align}\text{KL}[q\|p] &= \int q(w) \ln \frac{q(w)}{p(w|\mathcal D)} dw\\
+&= \int q(w) \ln q(w)dw - \int q(w) \ln p(w|D)dw\\
+&= -\text H(q) - \int q(w) \ln \frac{p(w, \mathcal D)}{p(\mathcal D)} dw \\
+&= -\text H(q) - \int q(w) \ln p(w, \mathcal D) dw + \int q(w) \ln p(\mathcal D) dw\\
+&= -\text H(q) - \int q(w) \ln p(w, \mathcal D) dw + \ln p(\mathcal D),
+\end{align}$$
+
+where $H(\cdot)$ denotes the differential entropy of a distribution.
+
+Therefore, optimising the KL divergence reduces to 
+
+$$\begin{align}q \leftarrow \arg\min_{q} \text{KL}[q\|p] &= \arg\min_{q} \left\{ - \int q(w) \ln p(w, \mathcal D) dw-\text H(q)\right \}\\
+&= \arg\min_{q} \left\{ -\langle \ln p(w,\mathcal D)\rangle_q-\text H(q)\right \}\\
+&= \arg\max_{q} \left\{ \langle \ln p(w,\mathcal D)\rangle_q +\text H(q)\right \}
+\end{align}$$
+
+
+Therefore, we do not need to know the normalising constant to find the optimal variational distribution. The loss can be interpreted as the sum of negative (expected) log full joint term $- \langle \ln p(w, \mathcal D) \rangle_{q} =- \int q(w) \ln p(w, \mathcal D) dw$ and a regularisation penalty $-\text H(q)$.
+
+That is we want, on average sense, to maximise the full joint term, but at the same time we do not want a overly confident variational distribution $q$ (note entropy measures uncertainty of a distribution, larger entropy means more random distribution). 
+
+"""
+
+# ╔═╡ ad647b20-9e7a-4b53-bbc5-7ff0c49c2a3c
+md"""
+
+**ELBO**. Note that KL divergence is always positive, therefore 
+
+
+$$\begin{align}\text{KL}[q\|p] 
+&= -\text H(q) - \int q(w) \ln p(w, \mathcal D) dw + \ln p(\mathcal D) \geq 0,
+\end{align}$$ which in turn implies
+
+$$\ln p(\mathcal D) \geq \text H(q) + \int q(w) \ln p(w, \mathcal D) dw \triangleq \text{ELBO}$$
+
+The model evidence is lowered bounded by the optimisation objective: $\text H(q) + \int q(w) \ln p(w, \mathcal D) dw.$ The function is therefore called ELBO. 
+
+VI therefore can also be viewed as a procedure to approximate the log model evidence $\ln p(\mathcal D)$,  which is intractable in most general cases, *from below*.
+
+
+The negative ELBO is called *variational free energy* in quantum physics community. 
+"""
+
+# ╔═╡ de714c36-1eac-4a92-8d6c-77947c245894
+md"""
+## Part 2. Mean field VI
+
+Mean field VI assumes $q(w) = \prod_{i} q(w_i)$, i.e. the approximating variational distribution is fully independent. Then variational calculus tells us the best approximating distrbution can be found by setting each dimension of $q$, $q(w_i)$ by the expectation of the log full joint distribution: i.e.
+
+for $i \in 1, \ldots, d$
+
+$$q(w_i) = E_{\{w_{j, j\neq i}\}}[\ln p(\mathcal D, w)].$$ 
+
+
+Consider the full Bayesian model for the fixed basis expansion model: i.e. given fixed basis expanded design matrix $\Phi$, and targets $\mathbf y$, the observations are of Gaussian form with noise level $\sigma^2 = 1/\beta$, 
+
+$$p(\mathbf y| \Phi,  \theta,\beta) = N(\Phi  \theta, \beta^{-1}\mathbf I_{N})$$
+and we further impose the following (hyper-)priors on the unknown parameters: 
+
+$p(\theta) = N(\boldsymbol 0, \text{diag}(\boldsymbol \alpha)^{-1}) = \prod_{d=1}^D N(\theta_d; 0, \alpha_d^{-1})$
+
+$$p(\boldsymbol \alpha) = \prod_d p(\alpha_d) = \prod_d \text{Gamma}(\alpha_d; a_0, b_0) = \prod_{d=1}^D \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d}$$
+
+$$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1} e^{-d_0 \beta}$$
+
+1. derive the MFVI algorithm for the problem.
+2. what's the algorithm's connection to Gibbs sampling ?
+3. why this approach cannot be directly applied to more general models, say logistic regression or neural networks ?
+
+"""
+
+# ╔═╡ 141fccea-1712-4a19-a0ad-e29e83ce7bc6
+begin
+	# generate the hidden signal 
+	function signal_(x, k= -0.2)
+		if (x> -1) && (x < 1) 
+			return 1
+		elseif (x>-8) && (x<-7)
+			return k * x + (1.6- k*(-8))
+		else
+			return 0
+		end
+	end
+	N = 50
+	σ² = 4*1e-2
+	# xsamples = rand(N) * 20 .- 10 
+	xsamples = collect(range(-10., 10., length=N))
+	# xsamples = shuffle(xsamples_)[1:N]
+	# generate targets ts or y
+	ts = signal_.(xsamples) + rand(Normal(0, sqrt(σ²)), N)
+end;
+
+# ╔═╡ cd2de8de-961a-4365-bac0-3b27b9041159
+begin
+	xs = -10:0.1:10
+	# Φₜₑₛₜ = basis_expansion(xs, xsamples, σϕ², intercept)
+	tₜₑₛₜ = signal_.(xs)
+	# wₘₗ = (Φ'*Φ)^(-1)*Φ'*ts
+	plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="Original")
+	scatter!(xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="Obvs")
+
+end
+
+# ╔═╡ 51e61619-585e-4699-99f0-65ad18ec165b
+md"""
+**Solution**
+1). The full joint is
+
+$p(\theta, \boldsymbol \alpha, \beta, \mathbf y|\Phi) = p(\boldsymbol \alpha)p(\beta)p(\theta|\boldsymbol \alpha)p(\mathbf y|\Phi, \theta, \beta)$
+
+Taking log, we have 
+
+$$\ln p(\theta, \boldsymbol \alpha, \beta, \mathbf y|\Phi) = \sum_{d} \ln p(\alpha_d) +\ln p(\beta) +\ln p(\theta|\boldsymbol \alpha) +\ln p(\mathbf y|\Phi, \theta, \beta)$$
+
+
+MFVI assumes an approximating VI distribution which are factorised or independent:
+
+$$q(\theta, \boldsymbol\alpha, \beta) = q(\boldsymbol \alpha) q(\theta) q(\beta) = \prod_{d} q(\alpha_d) q(\theta) q(\beta),$$
+
+and variational calculus tells us: to minimise the KL divergence, we only need to iteratively fix each variational distribution to its expectation.
+
+
+Take $\theta$ for example, 
+
+$$\begin{align}q^\ast(\theta) &\leftarrow E_{q(\beta, \boldsymbol \alpha)} [\ln p(\theta, \boldsymbol \alpha, \beta, \mathbf y|\Phi) ]\\
+&= E_{q(\beta, \boldsymbol \alpha)} \left [\sum_{d} \ln p(\alpha_d) +\ln p(\beta) +\ln p(\theta|\boldsymbol \alpha) +\ln p(\mathbf y|\Phi, \theta, \beta)\right ] \\
+&= \underbrace{\sum_d \langle\ln p(\alpha_d) \rangle_{q(\alpha_d)} + \langle\ln p(\beta) \rangle_{q(\beta)} }_{\text{const.}} + \langle \ln p(\theta|\boldsymbol \alpha)\rangle_{q(\boldsymbol \alpha)} + \langle\ln p(\mathbf y|\Phi, \theta, \beta) \rangle_{q(\beta)}  \\
+&= \langle \ln p(\theta|\boldsymbol \alpha)\rangle_{q(\boldsymbol \alpha)} + \langle\ln p(\mathbf y|\Phi, \theta, \beta) \rangle_{q(\beta)}  + C\\
+&= -\frac{1}{2}  \langle \theta^\top \text{diag}(\boldsymbol \alpha)\theta
+\rangle_{q(\boldsymbol \alpha)} -\frac{1}{2} \left \langle\beta (\mathbf y-\Phi\theta)^\top (\mathbf y -\Phi\theta)\right \rangle_{q(\beta)}+ C \\
+&= -\frac{1}{2}  \theta^\top \langle \text{diag}(\boldsymbol \alpha)\rangle_{q(\boldsymbol \alpha)}\theta
+ -\frac{\langle \beta \rangle}{2} (\mathbf y-\Phi\theta)^\top (\mathbf y -\Phi\theta) + C, \\
+\end{align}$$
+
+By completing the squares, we can find the posterior is a Gaussian:
+
+
+$$q^{\ast}(\theta) = N(\mathbf m_N, \mathbf C_N),$$
+
+where 
+
+
+$\mathbf m_N = \mathbf C_N (\langle \beta \rangle\Phi^\top \mathbf y), \mathbf C_N = (\text{diag}(\langle \boldsymbol \alpha\rangle) + \langle \beta\rangle\Phi^\top \Phi)^{-1}$
+
+Check [week 2's](https://lf28.github.io/MSc_2022/Bayes1_sol.jl.html) solution for more details. Note that you can simply set $\mathbf m_0 = \mathbf 0, \mathbf C_0^{-1} = \text{diag}(\langle \boldsymbol \alpha \rangle),$ and $\Sigma^{-1} = \langle \beta\rangle I_N$ to recover the above result.
+"""
+
+# ╔═╡ 0ccdd961-9eb4-4854-90d6-7b41dda103a4
+md"""
+
+Similarly, we can find the VI for $\boldsymbol \alpha, \beta$, due to the conjugate priors being used, they are all of Gamma form. And you should verify it. 
+
+To make it complete, their VI are
+
+$$q(\beta) = \text{Gamma}(c_N, d_N),$$ where 
+
+$$c_N = c_0 + \frac{N}{2}, d_N = d_0+\frac{1}{2} \langle ( \mathbf y - \Phi\theta)^\top ( \mathbf y - \Phi\theta)\rangle_{q(\theta)},$$
+
+
+The required expectation can be computed as
+
+$$\begin{align}\langle ( \mathbf y - \Phi\theta)^\top ( \mathbf y - \Phi\theta)\rangle_{q(\theta)} &= \langle \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi\theta+ \theta^\top\Phi^\top \Phi\theta \rangle_{q(\theta)}\\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} + \langle \text{tr}(\theta^\top\Phi^\top \Phi\theta)\rangle_{q(\theta)} \\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} + \langle \text{tr}(\Phi^\top \Phi\theta\theta^\top)\rangle_{q(\theta)} \\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} +  \text{tr}\left (\Phi^\top \Phi \langle\theta\theta^\top\rangle_{q(\theta)} \right )
+\end{align}$$
+
+The expected value of a Gaussian is just its mean $\langle \theta \rangle_q = \mathbf m_N,$ and the second moment can be calculated via $\mathbf C_N = \langle \theta\theta^\top\rangle - \langle \theta\rangle  \langle \theta\rangle^\top$ therefore $\langle \theta\theta^\top\rangle_q= \mathbf C_N + \langle \theta \rangle_q  \langle \theta \rangle_q ^\top.$
+
+Therefore, the expectation can also written in a neater form as:
+
+$$\begin{align}\langle ( \mathbf y - \Phi\theta)^\top ( \mathbf y - \Phi\theta)\rangle_{q(\theta)} 
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} +  \text{tr}\left (\Phi^\top \Phi \langle\theta\theta^\top\rangle_{q(\theta)} \right )\\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} +  \text{tr}\left (\Phi^\top \Phi \left (\mathbf C_N + \langle \theta \rangle_q  \langle \theta \rangle_q ^\top\right ) \right )\\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} +\text{tr}(\Phi^\top\Phi \langle \theta \rangle_q  \langle \theta \rangle_q ^\top) + \text{tr}(\Phi^\top\Phi \mathbf C_N) \\
+&= \mathbf y^\top \mathbf y -2 \mathbf y^\top  \Phi \langle \theta\rangle_{q(\theta)} +\langle \theta \rangle_q ^\top \Phi^\top\Phi \langle \theta \rangle_q   + \text{tr}(\Phi^\top\Phi \mathbf C_N) \\
+&= (\mathbf y - \Phi \mathbf m_N )^\top ( \mathbf y - \Phi \mathbf m_N ) + \text{tr}(\Phi^\top\Phi \mathbf C_N).
+\end{align}$$
+"""
+
+# ╔═╡ ebcca522-2f3f-4d89-bd7a-96f72dba8056
+md"""
+
+and $$q(\alpha_d) = \text{Gamma}(a_d, b_d)$$ where
+
+$$a_d = a_0 + \frac{1}{2}, b_d = b_0 +\frac{1}{2} \langle \theta_d^2\rangle_{q(\theta)}.$$
+
+Gamma distribution's expectations are widely known:
+
+$\langle \beta \rangle = \frac{c_N}{d_N}.$
+
+Similarly, for $\alpha_d$, its expectation under a Gamma variational distribution $q(\alpha_d) = \text{Gamma}(a_d, b_d)$ is 
+
+$$\langle \alpha_d \rangle = \frac{a_d}{b_d}.$$
+"""
+
+# ╔═╡ 41e52510-2d17-4a4d-b6f5-c452d7f84883
+md"""
+
+The MFVI algorithm for this particular model is
+
+*repeat until converge* 
+
+  1. *update variational distribution for $\theta$:*
+
+$$q^\ast(\theta)\leftarrow \mathcal N(\mathbf m_N, \mathbf C_N)$$
+
+  2. *update variational distribution for $\boldsymbol \alpha$:*
+
+$$q^\ast(\boldsymbol \alpha) \leftarrow \prod_{d} \text{Gamma}(a_d, b_d)$$
+
+  3. *update variational distribution for $\beta$:*
+
+$$q^\ast(\beta) \leftarrow \text{Gamma}(c_N, d_N)$$
+"""
+
+# ╔═╡ d29c0514-6a1e-4516-9d27-a0674483e5b5
+md"""
+
+2). Relation to Gibbs sampling,
+
+
+Gibbs sampling aims at *sampling* from full conditionals,
+
+$$x \sim p(x|\text{mb}(x)),$$
+
+
+MFVI aims at *fixating* the full conditionals to its expectation,
+
+$$q(x) = E_{q(\text{mb}(x))}[p(x|\text{mb}(x))].$$
+
+"""
+
+# ╔═╡ 747f77f9-eda4-4a49-8428-88c1b91a68c9
+md"""
+
+As a result, the algorithm of Gibbs sampling is very similar to the MFVI:
+
+*repeat until converge* 
+
+  1. *sample the full conditional distribution for $\theta$:*
+
+$$\theta^{(m)}\sim \mathcal N(\theta; \mathbf m_N, \mathbf C_N)$$
+
+  2. *sample the full conditional distribution for $\boldsymbol \alpha$:*
+
+$$\boldsymbol \alpha^{(m)} \sim \prod_{d} \text{Gamma}(\alpha_d; a_d, b_d)$$
+
+  3. *sample the full conditional distribution for $\beta$:*
+
+$$\beta^{(m)} \sim \text{Gamma}(\beta; c_N, d_N)$$
+
+
+Also note that the distribution parameters are different for the two algorithms. Gibbs sampling rely on the samples from other conditionals while MFVI uses the expectations from the other mean field variational distributions.
+"""
+
+# ╔═╡ f62b5fee-4765-466e-9f26-02a5b119a1e8
+md"""
+
+3).
+MFVI would fail as the approximating distribution is of unknown form, and the expectation has no closed form solution.
+
+Take logistic regression for example, the likelihood is not exponential quadratic but logistic transformation of a linear function of $\theta$. The posterior therefore is no longer Gaussian: i.e. we cannot massage the following term into a quadratic function:
+
+$$q^\ast(\theta) = \langle \ln p(\theta|\boldsymbol \alpha)\rangle + \langle \ln p(\mathbf y|\Phi, \theta)\rangle$$
+
+
+For neural networks, the likelihood term can be even more complicated due to the non-linear transformations used: $f(\phi_i)$, the likelihood will never by quadratic. 
+
+Then the whole iterative update procedure falls apart, e.g. $$\langle \theta \rangle$$ is unknown. 
+"""
+
+# ╔═╡ f30b5b09-860e-4dc7-91c4-2dff8c6608a3
+begin
+	# Radial basis function
+	# called Gaussian kernel in the paper
+	function rbf_basis_(x, μ, σ²)
+		exp.(-1 ./(2*σ²) .* (x .- μ).^2)
+	end
+
+	# vectorised version of basis expansion by RBF
+	function basis_expansion(xtest, xtrain, σ²=1, intercept = false)
+		# number of rows of xtrain, which is the size of basis
+		n_basis = size(xtrain)[1] 
+		n_obs = size(xtest)[1]
+		X = rbf_basis_(xtest, xtrain', σ²)
+		intercept ? [ones(n_obs) X] : X
+	end
+
+end
+
+# ╔═╡ fcb61290-3de5-403a-9183-7668baf6dec6
+begin
+	intercept = true
+	σϕ²= 0.5
+	Φ = basis_expansion(xsamples, xsamples, σϕ², intercept);
+	print()
+end
+
+# ╔═╡ 7813bb32-8b29-442d-814b-eb513e50d526
+function viBayesianLR(Φ, ts, a0=0, b0=0, c0=1e-6, d0=1e-6, maxIters=100)
+	N,M = size(Φ)
+	innerM = Φ'*Φ
+	# initialise starting points
+	αt = 10 .* ones(M)
+	βt = var(ts)
+	# initialisation for q(β)
+	ct = c0 + N/2
+	dt = ct * var(ts) 
+	# initialisation for q(α)
+	at = a0 + 0.5
+	bt = b0 .+ 0.5 * ones(M)
+	μt = zeros(M)
+	Σt = Diagonal(ones(M))
+	for i in 1:maxIters
+		# update q(w)
+		β̂ = ct/dt 
+		Â = Diagonal(at ./bt)
+		invΣt = β̂ * innerM + Â
+		Σt = inv(invΣt)
+		μt = β̂ * Σt * Φ' * ts
+		MM = Σt + μt * μt'
+		# update q(β)
+		# dt = d + 0.5 * sum(ts.^2) - sum(μt .* (Φ'*ts)) + 0.5 * sum((Φ * MM) .* Φ)
+		dt = d0 + 0.5 * (sum((ts-Φ*μt).^2) + tr(innerM * Σt))
+		# update q(α)
+		bt = b0 .+ 0.5 * (μt.^2 + diag(Σt))
+		# should check convergence here !
+	end
+	return μt, Σt, at, bt, ct, dt
+end
+
+# ╔═╡ f0b3f4d9-2a54-4351-bb73-30320b3fc58e
+begin
+	a0 = 1e-6
+	b0 = 1e-6
+	c0 = 1e-6
+	d0 = 1e-6
+	wᵥᵢ, Σᵥᵢ, aᵥᵢ, bᵥᵢ, cᵥᵢ, dᵥᵢ=viBayesianLR(Φ, ts, a0, b0, c0, d0);
+end;
+
+# ╔═╡ b36d4f31-95ea-4ce6-9409-e3ee1da9c24e
+plot(wᵥᵢ, label="μ")
+
+# ╔═╡ 8ab14983-73fd-4b85-82ad-a0b3404f5918
+md"""
+
+## Part 3. Fixed form VI or pathwise gradient
+
+Read Iain Murray's notes on VI. He has also provided a Python implementation for a general fixed form VI inference problem. Inspect and understand the code. Port the implementation to Julia.
+
+
+1. use fixed form VI to solve the above fixed basis expansion regression problem. 
+2. solve Bayesian logistic regression problem by fixed form VI. 
+"""
+
+# ╔═╡ 0ed401f5-097c-4206-8336-b751c3b8da17
 begin
 	D1 = [
 	    7 4;
@@ -86,245 +465,411 @@ begin
 	# scatter!(D2[:,1], D2[:,2], label="class 0")
 end
 
-# ╔═╡ e9260470-ee92-424f-a87c-87331e09ed8a
-begin
-	function logPosteriorLogisticR(w, m₀, C₀, X, y)
-		σ = logistic.(X * w)
-		Λ0 = inv(C₀)
-		grad = - Λ0  * (w-m₀) + X' * (y - σ)
-		d = σ .* (σ .- 1)
-		H = (X .* d)' * X - Λ0
-		# return logpdf(MvNormal(m0, V0), w) + sum(logpdf.(Bernoulli.(σ), y)), grad, H
-		return -0.5* (w-m₀)' * Λ0 * (w-m₀) + sum(logpdf.(Bernoulli.(σ), y)), grad, H
-	end
-	
-end
-
-# ╔═╡ 820b8250-5f53-4f28-9ebb-98a4228b5a03
-begin
-	function MCMCLogisticR(X, y, dim; mc= 1000, burnin=0, thinning=10, m₀= zeros(dim), C₀ = 100 .* Matrix(I, dim, dim), qV= nothing)
-		if isnothing(qV)
-			qV = Symmetric(inv(inv(C₀) + 6/π^2 * X' * X))
-		end
-		postLRFun(θ) = logPosteriorLogisticR(θ, m₀, C₀, X, y)
-		# alternatively
-		# use the Laplace approximation as a proposal distribution
-		# wt, Vt, _ = LaplaceLogisticR(X, y, dim; m0 = m₀, V0=C₀)
-		# inflate the variance a little bit to increase mixing of MCMC
-		# qV = (2.38^2/dim)*Vt
-		mcLR = MHRWMvN((θ) -> postLRFun(θ)[1], dim; logP = true, Σ = qV, x0=m₀, mc=mc, burnin=burnin, thinning= thinning)
-		return mcLR
-		# return wt, Ht
-	end
-
-
-	# Metropolis Hastings with Gaussian proposal
-	function MHRWMvN(pf, dim; logP = true, Σ = 10. *Matrix(I, dim, dim), x0=zeros(dim), mc=5000, burnin =0, thinning = 1)
-		samples = zeros(dim, mc)
-		C = cholesky(Σ)
-		L = C.L
-		# q = MvNormal(x0, Σ)
-		pfx0 = pf(x0) 
-		j = 1
-		for i in 1:((mc+burnin)*thinning)
-			# q = MvNormal(x0, Σ)
-			xstar = x0 + L * randn(dim)
-			pfxstar = pf(xstar)
-			if logP
-				Acp = pfxstar - pfx0 
-				Acp = exp(Acp)
-			else
-				Acp = pfxstar / pfx0 
-			end
-			if rand() < Acp
-				x0 = xstar
-				pfx0 = pfxstar
-			end
-			if i > burnin && mod(i, thinning) ==0
-				samples[:,j] = x0
-				j += 1
-			end
-		end
-		return samples
-	end
-	
-end
-
-# ╔═╡ 9cd3d3c7-eb99-46b4-8b87-6feafdb46595
-begin
-	dim=3
-	mcmcLR = MCMCLogisticR(D, targets, dim; thinning=100, mc=2000, C₀ = 1e2 * Matrix(I, dim, dim));
-end
-
-# ╔═╡ 24c39d29-295c-47cd-8ccc-f772ecadc872
-describe(Chains(mcmcLR', [:θ₀, :θ₁, :θ₂]))
-
-# ╔═╡ abde2a4a-7f49-430f-b8e3-3231789a0a6a
-cov(mcmcLR')
-
-# ╔═╡ e0129b8e-eb09-406e-b532-4f516461d909
-plot(Chains(mcmcLR', [:θ₀, :θ₁, :θ₂]))
-
-# ╔═╡ f67994bb-8887-40f5-943b-180470f5cee3
-begin
-	x1 = range(1, stop=10, length=100)
-	x2 = range(1, stop=10, length=100)
-end;
-
-# ╔═╡ 997c33bf-7aac-4176-b9fb-466405803088
-begin
-	function predictiveLogLik(ws, X, y)
-		mc = size(ws)[1]
-		h = logistic.(X * ws')
-		logLiks = sum(logpdf.(Bernoulli.(h), y), dims=1)
-		log(1/mc) + logsumexp(logLiks)
-	end
-	
-	
-	function mcPrediction(ws, X)
-		# mc = size(ws)[1]
-		# h = logistic.(X * ws')
-		mean(logistic.(X * ws), dims=2)
-	end
-	
-	function mcPrediction(ws, x1, x2)
-		# mc = size(ws)[1]
-		# h = logistic.(X * ws')
-		mean(logistic.([1.0 x1 x2] * ws))
-	end
-end
-
-# ╔═╡ a753083a-b302-4ad8-9ea5-4170fcb344fe
-begin
-	ppf(x, y) = mcPrediction(mcmcLR[:,1000:end], x, y)
-	contour(x1, x2, ppf, xlabel="x₁", ylabel="x₂", fill=true,  connectgaps=true, line_smoothing=0.85, title="Bayesian MCMC prediction", c=:roma)
-	scatter!(D1[:,1], D1[:,2], label ="class 1")
-	scatter!(D2[:,1], D2[:,2], label = "class 2")
-end
-
-# ╔═╡ c99c122e-8be2-44ff-87d2-2f3a987f8c1b
-begin
-	C₀ = 1e2 * Matrix(I, dim, dim)
-	mcmcLR_bad_proposal = MCMCLogisticR(D, targets, dim; mc=2000, C₀ = C₀, qV= C₀);
-end
-
-# ╔═╡ 68d69b50-4e9c-49f5-9ef8-48907a321223
-plot(Chains(mcmcLR_bad_proposal', [:θ₀, :θ₁, :θ₂]))
-
-# ╔═╡ 7996e6ff-b834-4d35-b41e-ce6fc41de523
-describe(Chains(mcmcLR_bad_proposal', [:θ₀, :θ₁, :θ₂]))
-
-# ╔═╡ 3914c205-dd87-435a-8402-dc85bfed143d
+# ╔═╡ d7646301-f225-4319-839b-855140801f54
 md"""
 
-## 2. Full Bayasian inference on hierarchical linear regression
+**Solution**
 
-Consider regression with fixed basis expansion problem, we introduce a prior on the regression parameter 
-
-$p(\theta|\boldsymbol \lambda^2)=N(\mathbf 0, \text{diag}(\boldsymbol \lambda^2))=\prod_{d=1}^D N(\theta_d; 0, \lambda_d^2) ;$ 
+The variational free energy is 
 
 
-Note that there is a sutble difference between the this model and the one we discussed last time. Here we have assumed each dimension of the regression parameter $\theta_d$ has its own variance parameter $\lambda_d$ for $d=1,\ldots, D$ rather than a shared precision $\lambda$. 
 
-Together with the likelihood 
+$$\mathcal F(q) = -\text H(q) - \langle \ln p(\mathbf w, \mathcal D) \rangle_q,$$
 
-$$p(\mathbf y|\Phi, \theta, \sigma^2) = N(\mathbf y; \Phi \theta, \sigma^2I_N)$$
+If we fix the approximating variational distribution to be a Gaussian, i.e. $q(\mathbf w) = N(\mathbf m, \mathbf V),$ we can optimise the variational free energy w.r.t the variational distribution $q$ via its parameters $\mathbf{m, V}$ instead. $\mathbf{m},\mathbf{V}$ are called variational parameters.
 
-The posterior becomes:
+To optimise a symmetric positive matrix is hard, instead we reparameterise the variance by cholesky decomposition:
 
-$$p(\theta|\boldsymbol \lambda^2, \sigma^2, \Phi, \mathbf y) = \frac{p(\theta|\boldsymbol \lambda^2)p(\mathbf y|\Phi,  \theta, \sigma^2)}{p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )}$$
+$\mathbf V = \mathbf L\mathbf  L^\top,$ where $\mathbf L$ is a lower triangular matrix:
 
-To deal with the $\boldsymbol \lambda^2, \sigma^2$, evidence procedure assumes they are hyperparameters and optimise them by maximum likelihood method (known Type-II MLE in literature) 
+$$\mathbf L = \begin{bmatrix}L_{11}& 0 &0 & \ldots& 0\\
+L_{21}& L_{22}& 0&\ldots& 0 \\
+\vdots& \vdots& \vdots&\vdots& \vdots \\
+L_{D1}& L_{D2}& L_{D3}&\ldots& L_{DD}\end{bmatrix}$$
 
-$$\sigma^2_{\text{ML}} , \boldsymbol \lambda^2_{\text{ML}} \triangleq \arg\max_{\lambda^2, \sigma^2} \ln p(\mathbf y|\sigma^2, \boldsymbol \lambda^2 )$$
+To make the computation more stable, we constrain the diagonal entries of $\mathbf L$ to be strictly positive, and reparameterise them by $\exp, \ln$ transformation:
 
+$$\mathbf L^\ast =\begin{bmatrix}\exp(L_{11}^\ast)& 0 &0 & \ldots& 0\\
+L_{21}^\ast& \exp(L_{22}^\ast)& 0&\ldots& 0 \\
+\vdots& \vdots& \vdots&\vdots& \vdots \\
+L_{D1}^\ast& L_{D2}^\ast& L_{D3}^\ast&\ldots& \exp(L_{DD}^\ast)\end{bmatrix}$$
 
-We can, however, deal with the problem in a full Bayesian way. That is to assume they are unknown **random variables** as well and impose priors on them. For convenience, assume the following priors for the two precision parameters $\alpha_d\triangleq 1/\lambda_d^2, \beta \triangleq 1/\sigma^2$:
+Therefore, the variational parameters become $\mathbf m, \mathbf L^\ast,$ where $L_{dd} = \exp(L^\ast_{dd}),$ and $L_{dd'} = L_{dd'}^\ast$ for $d\neq d'$.
 
-$$p(\boldsymbol \alpha) = \prod_d p(\alpha_d) = \prod_d \text{Gamma}(\alpha_d; a_0, b_0) = \prod_{d=1}^D \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d}$$
-
-$$p(\beta) = \text{Gamma}(c_0, d_0)= \frac{d_0^{c_0}}{\Gamma(c_0)} \beta^{c_0-1} e^{-d_0 \beta}$$
-
-1. what is the full joint distribution for the model ?
-
-2. what is the inference objective here ?
-
-3. derive and implement a Gibbs sampling algorithm for the model (with the given dataset below)
-   * compare the result with the evidence procedure
+You can think the transformation as a multivariate version of reparameterisation of $\sigma^2$:  $\sigma^2 = \exp(\ln \sigma) \cdot \exp(\ln\sigma)).$ And we optimise $\ln \sigma$ instead. 
 """
 
-# ╔═╡ 3050acb3-ad34-415a-920c-7825a801549a
+# ╔═╡ 084f17cb-8301-4708-9c81-c2b8c5f041f7
 md"""
-**solution**
-1) $p(\theta, \boldsymbol \alpha, \beta, \mathbf y|\Phi) = p(\boldsymbol \alpha)p(\beta)p(\theta|\boldsymbol \alpha)p(\mathbf y|\Phi, \theta, \beta)$
-"""
 
-# ╔═╡ fe23fd04-e7f0-4a93-8bf5-38146f8dac11
-md"""
-2) 
-
-the full conditional for $\theta$:
-
-$$p(\theta|\boldsymbol \alpha, \beta, \Phi, \mathbf y) \propto \cancel{p(\boldsymbol \alpha) p(\beta)} p(\theta|\boldsymbol \alpha) p(\mathbf y|\Phi, \theta, \beta)$$
+Since we have assumed $q$ is Gaussian, we can find its entropy in closed form:
 
 
-the full conditional for $\boldsymbol \alpha$:
+$$\text H(q) = \frac{D}{2} +\frac{1}{2} \ln |2\pi \mathbf V| = \frac{D}{2} +\frac{D}{2} \ln(2\pi)  + \sum_{d} \ln L_{dd}$$
 
-$$\begin{align}p(\boldsymbol \alpha|\theta, \beta, \Phi, \mathbf y) &\propto {p(\boldsymbol \alpha)} \cancel{p(\beta)} p(\theta|\boldsymbol \alpha) \cancel{p(\mathbf y|\Phi, \theta, \beta)} \\
-&= \prod_d \text{Gamma}(\alpha_d; a_0, b_0)\prod_{d} N(\theta_d; 0, \lambda_d^2)\\
-&= \prod_d \text{Gamma}(\alpha_d; a_0, b_0)N(\theta_d; 0, \lambda_d^2) \\
-&= \prod_d  \frac{b_0^{a_0}}{\Gamma(a_0)} \alpha_d^{a_0-1} e^{-b_0 \alpha_d} \frac{1}{\sqrt{2\pi} } \alpha_d^{\frac{1}{2}} e^{-\frac{\alpha_d\theta_d^2}{2} } \\
-&\propto \prod_d \cancel{\frac{b_0^{a_0}}{\Gamma(a_0)} }\alpha_d^{a_0-1} e^{-b_0 \alpha_d} \cancel{\frac{1}{\sqrt{2\pi} } }\alpha_d^{\frac{1}{2}} e^{-\frac{\alpha_d\theta_d^2}{2} }\\
-&= \prod_d \alpha_d^{a_0+\frac{1}{2} -1 } e^{-(b_0 + \frac{\theta_d^2}{2})\alpha_d} \\
-&= \prod_d \text{Gamma}(\alpha_d; a_d, b_d),
+The free energy becomes 
+
+$$\mathcal F(q) = - \sum_d \ln L_{dd} - \langle \ln p(\mathbf w, \mathcal D)\rangle_q + C$$
+
+Take gradient of the  variational free energy w.r.t $\mathbf{m}, \mathbf L:$
+
+$$\nabla_{\mathbf m} \mathcal F = - \nabla_{\mathbf m}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q, $$
+
+
+$$\nabla_{\mathbf L} \mathcal F = - \nabla_{\mathbf L} \left (\sum_d \ln L_{dd}\right )- \nabla_{\mathbf L}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q,$$
+
+The first part is $\nabla_{\mathbf L} \left ( \sum_d \ln L_{dd} \right ) = \text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D$
+
+
+We use the reparameterisation trick or path-wise gradient to side-step the difficulty of calculating the expectation.
+
+First note, if $\nu \sim N(\mathbf 0, \mathbf I),$ then $\mathbf w \triangleq \mathbf m + \mathbf L \nu \sim N(\mathbf m, \mathbf V)$, therefore
+
+$$\langle f(\mathbf w)\rangle_{\mathbf w\sim \mathcal N(\mathbf m, \mathbf V)} = \langle f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)}$$
+
+
+We can therefore propogate the gradient through the expectation:
+
+$$\begin{align}\nabla_{\mathbf m} \langle f(\mathbf w)\rangle_{\mathbf w\sim \mathcal N(\mathbf m, \mathbf V)} &= \nabla_{\mathbf m}\langle f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)}= \langle \nabla_{\mathbf m}f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)} \\
+&=\langle \nabla_{\mathbf m + \mathbf L \nu}f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)}
 \end{align}$$
-where 
 
-$a_d = a_0 + \frac{1}{2}, \; b_d = b_0 + \frac{\theta_d^2}{2}.$
+The second last equality holds as under regularity conditions, we can exchange the gradient and expectation. 
+
+For $\mathbf L$, we have 
 
 
-The full conditional for $\beta$:
+$$\begin{align}\nabla_{\mathbf L} \langle f(\mathbf w)\rangle_{\mathbf w\sim \mathcal N(\mathbf m, \mathbf V)} &= \langle \nabla_{\mathbf L}f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)} \\
+&=\langle \nabla_{\mathbf m + \mathbf L \nu}f(\mathbf m + \mathbf L \nu) \nu^\top \circ \mathbf S_{L}\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)}
+\end{align}$$
 
-$$p(\beta|\theta, \boldsymbol \alpha, \Phi, \mathbf y) \propto \cancel{p(\alpha)} {p(\beta)} \cancel{p(\theta|\boldsymbol \alpha)} {p(\mathbf y|\Phi, \theta, \beta)} = \text{Gamma}(\cdot, \cdot),$$
-
-The derivation is left as an exercise. 
-
+where $$\mathbf S_{\mathbf L} = \begin{bmatrix}1& 0 &0 & \ldots& 0\\
+1& 1& 0&\ldots& 0 \\
+\vdots& \vdots& \vdots&\vdots& \vdots \\
+1& 1& 1&\ldots& 1\end{bmatrix}.$$ The hadamard product just set the +1 upper triangular parts to be zero due the lower triangular structure of the matrix $\mathbf L$.
 
 """
 
-# ╔═╡ daa993ca-12fd-4d9b-936b-d16bdcc72571
-begin
-	# generate the hidden signal 
-	function signal_(x, k= -0.2)
-		if (x> -1) && (x < 1) 
-			return 1
-		elseif (x>-8) && (x<-7)
-			return k * x + (1.6- k*(-8))
-		else
-			return 0
-		end
-	end
-	N = 50
-	σ² = 4*1e-2
-	# xsamples = rand(N) * 20 .- 10 
-	xsamples_ = collect(range(-10., 10., length=N))
-	xsamples = shuffle(xsamples_)[1:N]
-	# generate targets ts or y
-	ts = signal_.(xsamples) + rand(Normal(0, sqrt(σ²)), N)
-end;
+# ╔═╡ cfdeee66-e4c4-48fc-af95-287e70fb0ec8
+md"""
 
-# ╔═╡ 95607851-c454-4e89-8ec0-ffb20750e351
+Therefore, we first sample $\nu^{(m)} \sim \mathcal N(\mathbf 0, \mathbf I_D),$ then propogate to $\mathbf w^{(m)} = \mathbf m + \mathbf L \nu^{(m)}$, the pathwise gradient can be approximated as
+
+$$\nabla_{\mathbf m} \mathcal F = - \nabla_{\mathbf m}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q = - \langle \nabla_{\mathbf w}   \ln p(\mathbf w, \mathcal D)\rangle_{\nu\sim N(\mathbf 0, \mathbf I)} \approx -\frac{1}{M} \sum_{m} \nabla_{\mathbf w^{(m)}}   \ln p(\mathbf w^{(m)}, \mathcal D)$$
+
+$$\begin{align}\nabla_{\mathbf L} \mathcal F &= - \text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D- \nabla_{\mathbf L}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q\\
+&= -\text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D- \langle \nabla_{\mathbf w}   \ln p(\mathbf w, \mathcal D) \nu^\top\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I_D)}\\
+&= -\text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D- \frac{1}{M} \sum_{m} \left \{\left [\nabla_{\mathbf w^{(m)}}   \ln p(\mathbf w^{(m)}, \mathcal D)\right ] (\nu^{(m)})^\top \circ \mathbf S_{\mathbf L}\right \} 
+\end{align}$$
+"""
+
+# ╔═╡ 8b009cd4-bafc-48aa-9dcd-df92e13d4b6d
+md"""
+
+Finally, note that due to reparameterisation of the diagonal entries of $\mathbf L,$ the diagonal entries's gradient need to be multiplied by $\exp\circ(\text{diag}(\mathbf L^\ast))$, where we have just simply applied chain rule.
+
+$$\begin{align}\nabla_{\mathbf L^\ast} \mathcal F &= \nabla_{\mathbf L} \mathcal F
+\end{align} \circ \left (\exp\circ(\text{diag}(\mathbf L^\ast))\right )$$
+
+"""
+
+# ╔═╡ 3f80ce90-c4d2-4085-80ae-f1ce1b0088a4
 begin
-	xs = -10:0.1:10
-	# Φₜₑₛₜ = basis_expansion(xs, xsamples, σϕ², intercept)
-	tₜₑₛₜ = signal_.(xs)
-	# wₘₗ = (Φ'*Φ)^(-1)*Φ'*ts
-	plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="Original")
-	scatter!(xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="Obvs")
+
+	function pack_L(LL)
+		diagidx = diagind(LL)
+		L = tril(LL)
+		L[diagidx] = exp.(diag(LL))
+		return L
+	end
 
 end
 
-# ╔═╡ a4f6dccc-3dd3-4311-b4d2-2e539b45d433
+# ╔═╡ a1bb4425-17cf-4d62-836f-559020721217
+function svi_grad(mm, LL, ℓ; mc = 1, mf=false)
+	D = size(mm)[1]
+	diagidx = diagind(LL)
+	if !mf
+		# L = tril(LL)
+		# L[diagidx] = exp.(diag(LL))
+		L = pack_L(LL)
+	else
+		L = Diagonal(exp.(diag(LL)))
+	end
+	ℱ = -0.5 * D - 0.5 * D * log(2 * π) - sum(diag(LL))
+	ν = randn(D, mc)
+	ww = mm .+ L * ν
+	ℓs, ∇ws = ℓ(ww)
+	ℱ -= mean(ℓs)
+	∇m = - mean(∇ws, dims=2)[:]
+	∇L = - tril((1 / mc) .* ∇ws * ν') 
+	∇L[diagidx] = (∇L[diagidx] .* L[diagidx]) 
+	∇L -= I
+	#  fixed form plus mean field assumption: i.e. isotropic diagonal Gaussian
+	# there are faster ways to do MF optimisation!
+	if mf
+		∇L = Diagonal(diag(∇L)) 
+	end
+	return ∇m, ∇L, ℱ
+end
+
+# ╔═╡ fb9b8223-14ec-4e4c-b9a9-f9c44e912008
+begin
+	# unnormalised log target density
+	function log_density(x)
+		mu = x[1]
+		log_sigma = x[2]
+		sigma_density = logpdf(Normal(0, 1.35), log_sigma)
+		mu_density = logpdf(Normal(0, exp(log_sigma)), mu)
+		return sigma_density + mu_density
+	end
+	
+	gx = x -> ForwardDiff.gradient(log_density, x); 
+	log_den_fun = (x) -> (mapslices(log_density, x, dims=1)[:], mapslices(gx, x, dims=1))
+end
+
+# ╔═╡ 8c2c59b1-063c-4010-af76-de63dec44717
+begin
+	dim =2
+	init_m = -1 * ones(dim)
+	init_L = LowerTriangular(rand(dim, dim))
+	svi_grad(init_m, init_L, log_den_fun; mc = 1, mf=true)
+end
+
+# ╔═╡ c7687b5f-0740-4dd9-b26b-8d29537ddced
+begin
+	m₀ = [-1, -1.]
+	L₀ = [-5 0.01; 0.01 -5]
+	opt = ADAM(0.01, (0.9, 0.999))
+	iters = 1000
+	mf =true
+	ℱs = zeros(iters) 
+	for t in 1:iters
+		∇m, ∇L, ℱs[t] = svi_grad(m₀, L₀, log_den_fun; mc = 50, mf=mf)
+		Flux.Optimise.update!(opt, m₀, ∇m)
+		Flux.Optimise.update!(opt, L₀, ∇L)
+	end
+end
+
+# ╔═╡ 2d85dce1-d532-42f9-9f1c-33932f3f425f
+m₀
+
+# ╔═╡ caefb087-9004-4762-8026-c9717ee1187e
+begin
+	L = pack_L(L₀)
+end
+
+# ╔═╡ 75f28936-2b95-4103-a06b-fd4c4908919a
+begin
+	x₁ = range(-2, stop=2, length=151)
+	x₂ = range(-4, stop=2, length=151)
+	plot(x₁,x₂, (x, y) -> exp(log_density([x, y])), st=:contour)
+	if !mf
+		plot!(x₁,x₂, (x, y) -> pdf(MvNormal(m₀, L *L'), [x,y]), st=:contour)
+	else
+		plot!(x₁,x₂, (x, y) -> pdf(MvNormal(m₀, Diagonal(diag(L)) *Diagonal(diag(L))'), [x,y]), st=:contour)
+	end
+end
+
+# ╔═╡ 7446506a-17fa-4c27-9ef4-dcef0057202a
+plot(-ℱs)
+
+# ╔═╡ a3a01e98-c8fc-428d-9264-9759fabe6826
+begin
+
+	function ℓ_fixed_basis(w, Φ, ts, m₀, α, β)
+		∇ℓ = - α .* w + β .* (Φ' * (ts .- Φ * w))
+		logpdf(MvNormal(m₀, sqrt.(1.0 ./ α)), w)  + sum(-0.5 .* β .* (ts .- Φ*w).^2, dims=1)[:], ∇ℓ
+	end
+
+
+	function ℓ_fixed_basis_2(w, Φ, ts, α, β)
+		dim = length(w)
+		# logpdf(filldist(LocationScale(0, sqrt(1/α), TDist(2)), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
+		logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
+		# logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * abs.(ts - Φ*w))
+	end
+
+end
+
+# ╔═╡ 9ceb3db3-da5e-47c8-9244-89c213d8f0b4
+begin
+
+	function ffvi(ℓfun, dim; mc=1, maxiters=5000 ,meanfield = false)
+		m = randn(dim)
+		L = randn(dim, dim)
+		opt = AMSGrad(0.01, (0.9, 0.999))
+		ℱs = zeros(maxiters) 
+		for t in 1:maxiters
+			∇m, ∇L, ℱs[t] = svi_grad(m, L, ℓfun; mc = mc, mf=meanfield)
+			Flux.Optimise.update!(opt, m, ∇m)
+			Flux.Optimise.update!(opt, L, ∇L)
+		end
+		return m, L, ℱs
+	end
+end
+
+# ╔═╡ ae10fc12-8ddc-4eab-815d-64fd49f5b37d
+begin
+	dim_fb = size(Φ)[2]
+	ℓ_fb(w) = ℓ_fixed_basis(w, Φ, ts, zeros(dim_fb) ,1.0, 1.0)
+	m_fb , L_fb , ℱs_fb = ffvi(ℓ_fb, dim_fb; mc = 1, meanfield=false)
+end
+
+# ╔═╡ 03c9a889-108a-4f4e-90e2-29526c3c6ead
+plot(-ℱs_fb)
+
+# ╔═╡ 94b16351-7968-486c-93e9-d80910741cfc
+begin
+
+
+	# function svi_grad_2(mm, LL, θ, ℓ; mc = 1, mf=false)
+	# 	D = size(mm)[1]
+	# 	diagidx = diagind(LL)
+	# 	if !mf
+	# 		L = tril(LL)
+	# 		L[diagidx] = exp.(diag(LL))
+	# 	else
+	# 		L = Diagonal(exp.(diag(LL)))
+	# 	end
+	# 	ℱ = -0.5 * D - 0.5 * D * log(2 * π) - sum(diag(LL))
+	# 	ν = randn(D, mc)
+	# 	wσ² = exp.(2.0 .* θ)
+	# 	∇θ = (- diag(L * L')  - mm.^2) ./ wσ² .+ 1.0
+	# 	ww = mm .+ L * ν
+	# 	ℓs, ∇ws = ℓ(ww)
+	# 	ℱ -= mean(ℓs)
+	# 	∇m = - mean(∇ws, dims=2)[:]
+	# 	∇L = - tril((1 / mc) .* ∇ws * ν') 
+	# 	∇L[diagidx] = (∇L[diagidx] .* L[diagidx]) 
+	# 	∇L -= I
+	# 	#  fixed form plus mean field assumption: i.e. isotropic diagonal Gaussian
+	# 	if mf
+	# 		∇L = ∇L .* Matrix(I, D,D)
+	# 	end
+	# 	return ∇m, ∇L, ∇θ, ℱ
+	# end
+
+	function ffvi_fixed_basis_regression(ℓlik, ℓprior, dim; mc=1, maxiters=5000, meanfield = false)
+		m = zeros(dim)
+		L = zeros(dim, dim)
+		opt = AMSGrad(0.01, (0.9, 0.999))
+		ℱs = zeros(maxiters) 
+		θ = log(10.0) * ones(dim) 
+		θ₀ = log(10.0)
+		σ² = exp.(2.0 .* θ)
+		s = exp.(2.0 .* θ₀)
+		for t in 1:maxiters
+			function ℓfun(w) 
+				logL, ∇l = ℓlik(w, s) 
+				logP, ∇p = ℓprior(w, σ²)
+				return logL + logP, ∇l+∇p
+			end
+			∇m, ∇L,  ℱs[t] = svi_grad(m, L, ℓfun; mc = mc, mf=meanfield)
+			Flux.Optimise.update!(opt, m, ∇m)
+			Flux.Optimise.update!(opt, L, ∇L)
+			# alternatively, gradient descent on hyperparameters
+			# Flux.Optimise.update!(opt, θ, ∇θ)
+			# θ[θ .> 100] .= 100.0
+			# update hyperparameter
+			L0 = pack_L(L)
+			Σ = L0 * L0'
+			# σ² = (sum(L0.^2) + sum(m.^2))/dim
+			σ² = diag(Σ) + m.^2
+			# s = mean((ts - Φ * m).^2)
+			s = (sum((ts .- Φ * m).^2) + tr(Φ'*Φ * Σ))/ size(Φ)[1]
+		end
+		return m, L, ℱs, σ², s
+	end
+
+	function ℓ_fixed_basis_lik(w, Φ, ts, m₀, β)
+		∇ℓ = β .* (Φ' * (ts .- Φ * w))
+		sum(-0.5 .* β .* (ts .- Φ*w).^2, dims=1)[:], ∇ℓ
+	end
+
+	function ℓ_gaussian_prior(w, σ²; dim=nothing)
+		if isnothing(dim)
+			dim = length(σ²)
+		end
+		logpdf(MvNormal(zeros(dim), sqrt.(σ²)), w) , - (1 ./ σ²) .* w 
+	end
+
+end
+
+# ╔═╡ 34a2a48d-8802-4fb8-bcac-41b3a4de793c
+begin
+	ℓ_lik(w, σ²) = ℓ_fixed_basis_lik(w, Φ, ts, zeros(dim_fb), 1/σ²)
+	ℓ_prior(w, σ²) = ℓ_gaussian_prior(w, σ²; dim = dim_fb)
+	m_fb_ , L_fb_ , ℱs_fb_, σ²_, s_ = ffvi_fixed_basis_regression(ℓ_lik, ℓ_prior, dim_fb;mc =100)
+
+end
+
+# ╔═╡ 7f229bb8-cfc5-4cc1-a603-2244dddad00d
+plot((1 ./ σ²_))
+
+# ╔═╡ ef8a496e-791c-47b5-84ee-af95c6d71df6
+plot(-ℱs_fb_)
+
+# ╔═╡ 1b81b6cd-87d1-4c49-bd54-06c57c62182b
+begin
+	
+	ℓ_fb_2(w) = ℓ_fixed_basis_2(w, Φ, ts, 1.0, 1.0)
+	gx_fb2 = x -> ForwardDiff.gradient(ℓ_fb_2, x); 
+	ℓ_fb_fun2 = (x) -> (mapslices(ℓ_fb_2, x, dims=1)[:], mapslices(gx_fb2, x, dims=1))
+	m_fb2 , L_fb2 , ℱs_fb2 = ffvi(ℓ_fb_fun2, dim_fb)
+
+end
+
+# ╔═╡ d79dc084-0cd8-484e-bd17-3d0abce254e1
+begin
+	# ℓ_normal_ = (x) -> (mapslices(ℓ_normal, x, dims=1)[:], mapslices(g_full, x, dims=1))
+	# m_normal , L_normal , ℱs_normal = ffvi(ℓ_normal_, 2)
+	# m_normal = zeros(2)
+	# L_normal = zeros(2, 2)
+	# opt_normal = AMSGrad(0.01, (0.9, 0.999))
+	# iters_normal = 2000
+	# mf_normal = false
+	# ℱs_normal = zeros(iters_normal) 
+	# for t in 1:iters_normal
+	# 	∇m, ∇L, ℱs_normal[t] = svi_grad(m_normal, L_normal, ℓ_normal_; mc = 10, mf=mf_normal)
+	# 	Flux.Optimise.update!(opt, m_normal, ∇m)
+	# 	Flux.Optimise.update!(opt, L_normal, ∇L)
+	# end
+	# plot(ℱs_normal)
+end
+
+# ╔═╡ a474cfda-755e-4fed-a6d3-441195c3ed3a
+# vectorised version of log posterior of logistic regression
+function logPosteriorLogisticR(w, m0, V0, X, y)
+	σ = logistic.(X * w)
+	Λ0 = inv(V0)
+	grad = - Λ0  * (w .- m0) + X' * (y .- σ)
+	return logpdf(MvNormal(m0, V0), w) .+ sum(logpdf.(Bernoulli.(σ), y), dims=1)[:], grad
+end
+
+# ╔═╡ 0e5ea9e0-c335-4309-92d9-bda23328a230
+begin
+	m0 = zeros(3)
+	V0 = 100. .* Matrix(I, 3, 3)
+end
+
+# ╔═╡ d1b3c121-f35d-491c-834f-6c8de8410df0
+m_lr , L_lr , ℱs_lr = ffvi((w) -> logPosteriorLogisticR(w, m0, V0, D, targets), 3;mc =10, meanfield=false)
+
+# ╔═╡ e78b2b3c-2660-4651-b5d9-4d974af4d451
+pack_L(L_lr)* pack_L(L_lr)'
+
+# ╔═╡ 58cd8b62-5f55-4e7a-a5eb-ea372eb78e88
+plot(-ℱs_lr)
+
+# ╔═╡ 0a7e9d02-1a8b-4c9f-a61c-55c5276ecfef
+md"""
+
+## Appendix
+
+"""
+
+# ╔═╡ 15f1b0ab-448a-4bbf-9941-9502623681e5
 begin
 	# Gibbs sampling solution
 
@@ -350,7 +895,7 @@ begin
 	end
 
 
-	function gibbsBayesianLR(Φ, ts, a0, b0, c0, d0, mc=5000, burnin=1000)
+	function gibbsBayesianLR(Φ, ts, a0, b0, c0, d0, mc=5000, burnin=2000)
 		N,M = size(Φ)
 		# place holders or storage
 		ws = zeros(M, mc)
@@ -384,161 +929,90 @@ begin
 
 end
 
-# ╔═╡ 1e7397dc-8069-4841-9fef-4ea027910c08
-begin
-	# Radial basis function
-	# called Gaussian kernel in the paper
-	function rbf_basis_(x, μ, σ²)
-		exp.(-1 ./(2 .* σ²) .* (x .- μ).^2)
-	end
+# ╔═╡ 60c96652-ffe5-444a-8cda-b5fae6472c77
+ws, αs, βs = gibbsBayesianLR(Φ, ts, a0, b0, c0, d0);
 
-	# vectorised version of basis expansion by RBF
-	function basis_expansion(xtest, xtrain, σ²=1, intercept = false)
-		# number of rows of xtrain, which is the size of basis
-		n_basis = size(xtrain)[1] 
-		n_obs = size(xtest)[1]
-		X = rbf_basis_(xtest, xtrain', σ²)
-		intercept ? [ones(n_obs) X] : X
-	end
-
-end
-
-# ╔═╡ b07ce81e-d83c-403d-92af-e7f305663a47
-begin
-	intercept = true
-	σϕ²= 0.5
-	Φ = basis_expansion(xsamples, xsamples, σϕ², intercept);
-	print()
-end
-
-# ╔═╡ 85996b49-5f36-42b8-aaee-752bbf6fd6e3
-begin
-	a0 = 1e-6
-	b0 = 1e-6
-	c0 = 1e-6
-	d0 = 1e-6
-	ws, αs, βs = gibbsBayesianLR(Φ, ts, a0, b0, c0, d0);
-	# gibbsPrediction = mean(predict(xs, ws, xsamples, σϕ², intercept), dims=2)
-	plot(mean(ws[:, 1000:100:end], dims=2), title="w samples", label="")
-	plot!(ws[:, 1000:100:end], alpha=0.1,title="w samples", label="")
-end
-
-# ╔═╡ 84d65d04-4984-4565-aba7-7577fc7fc64d
-md"""
-Larger $\alpha$ values signal the feature is shut-off. 
-"""
-
-# ╔═╡ c8f49593-2f30-4142-a278-bd772467a2b9
-plot(αs[:, 1], label="", title="α samples")
-
-# ╔═╡ 52dc2fef-dcb4-4c07-8d3f-22030f251013
+# ╔═╡ c4351958-ef47-4c69-ba95-da52e7b54fb5
 begin
 	# xs = -10:0.1:10
 	Φₜₑₛₜ = basis_expansion(xs, xsamples, σϕ², intercept)
 	# tₜₑₛₜ = signal_.(xs)
-	θₘₗ(Φ, t, ϵ) =  (Φ'*Φ + ϵ*I)^(-1)*Φ'*ts
-	wₘₗ = θₘₗ(Φ, ts, 1e-20)
-	θₘₐₚ(Φ, t, σ², λ²) = inv( (1/σ²) * Φ'*Φ + (1/λ²) * I) * (1/σ²)*Φ'*t
-	wₘₐₚ = θₘₐₚ(Φ, ts, 1.0, 15.0)
+	wₘₗ = (Φ'*Φ)^(-1)*Φ'*ts
 	plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="Original")
 	scatter!(xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="Obvs")
 		
-	plot!(xs, Φₜₑₛₜ*wₘₗ, linestyle=:solid, lw=2, label="ML")
-	plot!(xs, Φₜₑₛₜ*wₘₐₚ, linestyle=:solid, lw=2, label="MAP")
+	plot!(xs, Φₜₑₛₜ*wₘₗ, linecolor=:green, linestyle=:solid, lw=1, label="ML")
+		
+	# plot!(xs, Φₜₑₛₜ*wₑₘ, linecolor=:red, linestyle=:solid, lw=2, label="EM")
 	gibbsPredictions = Φₜₑₛₜ * ws
-	plot!(xs, mean(gibbsPredictions, dims=2), linecolor=:blue, linestyle=:solid, lw=2, label="Bayesian Gibbs")
+	plot!(xs, mean(gibbsPredictions, dims=2), linecolor=:blue, linestyle=:solid, lw=2, label="Gibbs")
 	
+	plot!(xs, Φₜₑₛₜ*wᵥᵢ, linecolor=:orange, linestyle=:solid, lw=2, label="VI")
+
+	# gibbsFullPred = predict_basis(xs, wϕs, σϕs, xsamples, intercept)
+	# plot!(xs, mean(gibbsFullPred, dims=2), linecolor=:cyan3, linestyle=:solid, lw=2, label="Full Bayes")
+
+	# xtest_ = basis_expansion(xs, xsamples, σϕ², intercept)
+	# turingPrediction=prediction(chain_, xtest_)
+	# plot!(xs, turingPrediction, linecolor=:purple, linestyle=:solid, lw=2, label="Turing")
+
+	# studentPrediction=prediction(chain_student, xtest_)
+	# plot!(xs, studentPrediction, linecolor=:pink, linestyle=:solid, lw=2, label="T Turing")
 end
 
-# ╔═╡ e3ce0490-d9a0-49b9-b631-d6f2bcd86805
-mseₘₗ = mean((Φₜₑₛₜ*wₘₗ - tₜₑₛₜ).^2)
-
-# ╔═╡ 33e0dd32-6f75-4453-8de7-0129a9e365eb
-mseₘₐₚ = mean((Φₜₑₛₜ*wₘₐₚ - tₜₑₛₜ).^2)
-
-# ╔═╡ 0d6833c3-fe75-4d6c-aa1b-ee359600ad2a
-mse_gibbs = mean((mean(gibbsPredictions, dims=2) - tₜₑₛₜ).^2)
-
-# ╔═╡ 63d63399-33ac-45c6-a819-025ecc591867
+# ╔═╡ f7235d15-af24-48de-beba-ecb52f55896a
 begin
-	plot(wₘₐₚ, label="MAP")
-	plot!(mean(ws, dims=2), label="Gibbs")
-	# plot!(wₘₗ, label="ML")
-	# plot(wₘₐₚ, label="MAP")
-end
-
-# ╔═╡ 16e9ac03-8f05-45f1-b780-5573d2f34434
-begin
-	step =25
+	
 	plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="Original")
 	scatter!(xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="Obvs")
-	plot!(xs, gibbsPredictions[:, 1:step:end], linecolor=:red, linestyle=:solid, lw=0.1, label="")
-	plot!(xs, mean(gibbsPredictions, dims=2), linecolor=:red, linestyle=:solid, lw=2, label="Gibbs")
-end
-
-# ╔═╡ e09d661f-65b1-4438-ae48-6f1301f51b39
-begin
-	# Radial basis function
-	# called Gaussian kernel in the paper
-	function relu(x, μ)::Float64
-		# exp.(-1 ./(2 .* σ²) .* (x .- μ).^2)
-		x-μ > 0 ? x-μ : 0.0
-	end
-
-end
-
-# ╔═╡ 19bdcc80-fa95-4030-aaed-2700b1bb1b73
-plot(xs, relu.(xs, xsamples[1:end]'), label="")
-
-# ╔═╡ caa964dd-bab8-4535-95be-c7d7187cd2d5
-plot(xs, tanh.(xs .- xsamples[1:end]'), label="")
-
-# ╔═╡ 3809af1f-f3a8-4d82-bf65-38c507663cb3
-Φᵣₑₗᵤ = [ones(length(xsamples)) vcat([relu.(xsamples[i], xsamples)' for i in 1:length(xsamples)]...)]
-
-# ╔═╡ dcb6dee1-b4fa-4126-99a9-819241e86f65
-Φₜₐₙₕ = [ones(length(xsamples)) vcat([tanh.(xsamples[i] .- xsamples)' for i in 1:length(xsamples)]...)]
-
-# ╔═╡ bebb8687-e599-4411-9769-a05a3299eb20
-ws_relu, αs_relu, βs_relu = gibbsBayesianLR(Φᵣₑₗᵤ, ts, a0, b0, c0, d0);
-
-# ╔═╡ f51a5cff-03bb-4cd4-8114-e7ee415ef5b2
-ws_tanh, αs_tanh, βs_tanh = gibbsBayesianLR(Φₜₐₙₕ, ts, a0, b0, c0, d0);
-
-# ╔═╡ 62eb03a1-25f4-4bec-a215-0e7cf4e235f3
-begin
-	# xs = -10:0.1:10
-	Φₜₑₛₜrelu = [ones(length(xs)) vcat([relu.(xs[i], xsamples)' for i in 1:length(xs)]...)]
-	Φₜₑₛₜtanh = [ones(length(xs)) vcat([tanh.(xs[i] .- xsamples)' for i in 1:length(xs)]...)]
-	wₘₗrelu = θₘₗ(Φᵣₑₗᵤ, ts, 1e-20)
-	wₘₐₚrelu = θₘₐₚ(Φᵣₑₗᵤ, ts, 1.0, 15.0)
-	wₘₗtanh = θₘₗ(Φₜₐₙₕ, ts, 1e-20)
-	wₘₐₚtanh = θₘₐₚ(Φₜₐₙₕ, ts, 1.0, 15.0)
-	pᵣₑₗᵤ = plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="Original")
-	pₜₐₙₕ = plot(xs, tₜₑₛₜ, ylim= [-0.8, 2.5], linecolor=:black, linestyle=:dash, label="")
-	scatter!(pᵣₑₗᵤ, xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="Obvs")
-	scatter!(pₜₐₙₕ, xsamples, ts, markershape=:xcross, markersize=2.5, markerstrokewidth=0.1, markercolor=:gray, markeralpha=0.9, label="")
 		
-	plot!(pᵣₑₗᵤ, xs, Φₜₑₛₜrelu*wₘₗrelu, linestyle=:solid, lw=2, label="ML relu")
-	plot!(pᵣₑₗᵤ, xs, Φₜₑₛₜrelu*wₘₐₚrelu, linestyle=:solid, lw=2, label="MAP relu")
-	gibbsPredictions_relu = Φₜₑₛₜrelu * ws_relu
-	plot!(pᵣₑₗᵤ, xs, mean(gibbsPredictions_relu, dims=2), linecolor=:blue, linestyle=:solid, lw=2, label="Bayesian Gibbs relu")
-
+	plot!(xs, Φₜₑₛₜ*wₘₗ,  linestyle=:solid, lw=1, label="ML")
+		
 	
-	plot!(pₜₐₙₕ, xs, Φₜₑₛₜtanh*wₘₗtanh, linestyle=:solid, lw=2, label="ML tanh")
-	plot!(pₜₐₙₕ, xs, Φₜₑₛₜtanh*wₘₐₚtanh, linestyle=:solid, lw=2, label="MAP tanh")
-	gibbsPredictions_tanh = Φₜₑₛₜtanh * ws_tanh
-	plot!(pₜₐₙₕ, xs, mean(gibbsPredictions_tanh, dims=2), linecolor=:blue, linestyle=:solid, lw=2, label="Bayesian Gibbs tanh")
+	plot!(xs, Φₜₑₛₜ*wᵥᵢ,  linestyle=:solid, lw=2, label="MFVI")
+	plot!(xs, Φₜₑₛₜ*m_fb, linestyle=:solid, lw=2, label="FFVI")
+	plot!(xs, Φₜₑₛₜ*m_fb_, linestyle=:solid, lw=2, label="FFVI with hyper update")
+	plot!(xs, Φₜₑₛₜ*m_fb2, linestyle=:solid, lw=2, label="FFVI Laplace prior")
 
-	plot(pᵣₑₗᵤ, pₜₐₙₕ, layout=(2,1))
+end
+
+# ╔═╡ 4bae7ad5-e93e-452c-b9cf-6098b480999c
+begin
+	function predictiveLogLik(ws, X, y)
+		mc = size(ws)[1]
+		h = logistic.(X * ws')
+		logLiks = sum(logpdf.(Bernoulli.(h), y), dims=1)
+		log(1/mc) + logsumexp(logLiks)
+	end
+	
+	
+	function mcPrediction(ws, X)
+		# mc = size(ws)[1]
+		# h = logistic.(X * ws')
+		mean(logistic.(X * ws), dims=2)
+	end
+	
+	function mcPrediction(ws, x1, x2)
+		# mc = size(ws)[1]
+		# h = logistic.(X * ws')
+		mean(logistic.([1.0 x1 x2] * ws))
+	end
+end
+
+# ╔═╡ de6718b8-b3d1-461b-8d8f-0c575f1208b4
+begin
+	x1 = range(1, stop=10, length=100)
+	x2 = range(1, stop=10, length=100)
+	mcVILR = m_lr .+ pack_L(L_lr) * randn(3,100)
+	ppfVIfull(x, y) = mcPrediction(mcVILR, x, y)
+	contour(x1, x2, ppfVIfull, xlabel="x1", ylabel="x2", fill=true,  connectgaps=true, line_smoothing=0.85, title="Bayesian FFVI prediction", c=:roma)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-DistributionsAD = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
-FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -552,15 +1026,14 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
 Distributions = "~0.25.62"
-DistributionsAD = "~0.6.40"
-FiniteDifferences = "~0.12.24"
+Flux = "~0.13.3"
 ForwardDiff = "~0.10.30"
 LaTeXStrings = "~1.3.0"
 MCMCChains = "~5.3.1"
-Plots = "~1.29.0"
+Plots = "~1.31.1"
 StatsFuns = "~1.0.1"
 StatsPlots = "~0.14.34"
-Turing = "~0.21.5"
+Turing = "~0.21.6"
 Zygote = "~0.6.40"
 """
 
@@ -594,6 +1067,12 @@ git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
 uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 version = "0.3.4"
 
+[[deps.Accessors]]
+deps = ["Compat", "CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "LinearAlgebra", "MacroTools", "Requires", "Test"]
+git-tree-sha1 = "63117898045d6d9e5acbdb517e3808a23aa26436"
+uuid = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
+version = "0.1.14"
+
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "af92965fb30777147966f58acb05da51c5616b5f"
@@ -608,9 +1087,9 @@ version = "0.3.5"
 
 [[deps.AdvancedMH]]
 deps = ["AbstractMCMC", "Distributions", "Random", "Requires"]
-git-tree-sha1 = "5d9e09a242d4cf222080398468244389c3428ed1"
+git-tree-sha1 = "d7a7dabeaef34e5106cdf6c2ac956e9e3f97f666"
 uuid = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
-version = "0.6.7"
+version = "0.6.8"
 
 [[deps.AdvancedPS]]
 deps = ["AbstractMCMC", "Distributions", "Libtask", "Random", "StatsFuns"]
@@ -646,21 +1125,21 @@ version = "3.5.1+1"
 
 [[deps.ArrayInterface]]
 deps = ["ArrayInterfaceCore", "Compat", "IfElse", "LinearAlgebra", "Static"]
-git-tree-sha1 = "d956c0606a3bc1112a1f99a8b2309b79558d9921"
+git-tree-sha1 = "1d062b8ab719670c16024105ace35e6d32988d4f"
 uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-version = "6.0.17"
+version = "6.0.18"
 
 [[deps.ArrayInterfaceCore]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "d618d3cf75e8ed5064670e939289698ecf426c7f"
+git-tree-sha1 = "5e732808bcf7bbf730e810a9eaafc52705b38bb5"
 uuid = "30b0a656-2188-435a-8636-2ec0e6a096e2"
-version = "0.1.12"
+version = "0.1.13"
 
-[[deps.ArrayInterfaceStaticArrays]]
-deps = ["Adapt", "ArrayInterface", "LinearAlgebra", "Static", "StaticArrays"]
-git-tree-sha1 = "d7dc30474e73173a990eca86af76cae8790fa9f2"
-uuid = "b0d46f97-bff5-4637-a19a-dd75974142cd"
-version = "0.1.2"
+[[deps.ArrayInterfaceStaticArraysCore]]
+deps = ["Adapt", "ArrayInterfaceCore", "LinearAlgebra", "StaticArraysCore"]
+git-tree-sha1 = "a1e2cf6ced6505cbad2490532388683f1e88c3ed"
+uuid = "dd5226c6-a4d4-4bc7-8575-46859f9c95b9"
+version = "0.1.0"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -676,6 +1155,12 @@ deps = ["Dates", "IntervalSets", "IterTools", "RangeArrays"]
 git-tree-sha1 = "1dd4d9f5beebac0c03446918741b1a03dc5e5788"
 uuid = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
 version = "0.4.6"
+
+[[deps.BFloat16s]]
+deps = ["LinearAlgebra", "Printf", "Random", "Test"]
+git-tree-sha1 = "a598ecb0d717092b5539dbbe890c98bac842b072"
+uuid = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
+version = "0.2.0"
 
 [[deps.BangBang]]
 deps = ["Compat", "ConstructionBase", "Future", "InitialValues", "LinearAlgebra", "Requires", "Setfield", "Tables", "ZygoteRules"]
@@ -708,6 +1193,12 @@ git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.2"
 
+[[deps.CUDA]]
+deps = ["AbstractFFTs", "Adapt", "BFloat16s", "CEnum", "CompilerSupportLibraries_jll", "ExprTools", "GPUArrays", "GPUCompiler", "LLVM", "LazyArtifacts", "Libdl", "LinearAlgebra", "Logging", "Printf", "Random", "Random123", "RandomNumbers", "Reexport", "Requires", "SparseArrays", "SpecialFunctions", "TimerOutputs"]
+git-tree-sha1 = "e4e5ece72fa2f108fb20c3c5538a5fa9ef3d668a"
+uuid = "052768ef-5323-5732-b1bb-66c8b64840ba"
+version = "3.11.0"
+
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
 git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
@@ -722,9 +1213,9 @@ version = "0.5.1"
 
 [[deps.ChainRules]]
 deps = ["ChainRulesCore", "Compat", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "Statistics"]
-git-tree-sha1 = "68938888dad80c4da1db4e7e3c4405c13d0afd13"
+git-tree-sha1 = "97fd0a3b7703948a847265156a41079730805c77"
 uuid = "082447d4-558c-5d27-93f4-14fc19e9eca2"
-version = "1.35.3"
+version = "1.36.0"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -746,9 +1237,9 @@ version = "0.14.2"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random"]
-git-tree-sha1 = "7297381ccb5df764549818d9a7d57e45f1057d30"
+git-tree-sha1 = "1fd869cc3875b57347f7027521f561cf46d1fcd8"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.18.0"
+version = "3.19.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -810,6 +1301,12 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "f74e9d5388b8620b4cee35d4c5a618dd4dc547f4"
 uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 version = "1.3.0"
+
+[[deps.ContextVariablesX]]
+deps = ["Compat", "Logging", "UUIDs"]
+git-tree-sha1 = "8ccaa8c655bc1b83d2da4d569c9b28254ababd6e"
+uuid = "6add18c4-b38d-439d-96f6-d6bc489c04c5"
+version = "0.1.2"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -893,9 +1390,9 @@ version = "0.25.62"
 
 [[deps.DistributionsAD]]
 deps = ["Adapt", "ChainRules", "ChainRulesCore", "Compat", "DiffRules", "Distributions", "FillArrays", "LinearAlgebra", "NaNMath", "PDMats", "Random", "Requires", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "ZygoteRules"]
-git-tree-sha1 = "d32a7e392ca7fb144927ab1a1d59b4bab681266e"
+git-tree-sha1 = "ec811a2688b3504ce5b315fe7bc86464480d5964"
 uuid = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
-version = "0.6.40"
+version = "0.6.41"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -937,6 +1434,11 @@ git-tree-sha1 = "bad72f730e9e91c08d9427d5e8db95478a3c323d"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.4.8+0"
 
+[[deps.ExprTools]]
+git-tree-sha1 = "56559bbef6ca5ea0c0818fa5c90320398a6fbf8d"
+uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
+version = "0.1.8"
+
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
 git-tree-sha1 = "b57e3acbe22f8484b4b5ff66a7499717fe1a9cc8"
@@ -951,15 +1453,27 @@ version = "4.4.0+0"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
-git-tree-sha1 = "505876577b5481e50d089c1c68899dfb6faebc62"
+git-tree-sha1 = "90630efff0894f8142308e334473eba54c433549"
 uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-version = "1.4.6"
+version = "1.5.0"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
 uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
 version = "3.3.10+0"
+
+[[deps.FLoops]]
+deps = ["BangBang", "Compat", "FLoopsBase", "InitialValues", "JuliaVariables", "MLStyle", "Serialization", "Setfield", "Transducers"]
+git-tree-sha1 = "4391d3ed58db9dc5a9883b23a0578316b4798b1f"
+uuid = "cc61a311-1640-44b5-9fba-1b764f453329"
+version = "0.2.0"
+
+[[deps.FLoopsBase]]
+deps = ["ContextVariablesX"]
+git-tree-sha1 = "656f7a6859be8673bf1f35da5670246b923964f7"
+uuid = "b9860ae5-e623-471e-878b-f6a53c775ea6"
+version = "0.1.1"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
@@ -970,17 +1484,23 @@ git-tree-sha1 = "246621d23d1f43e3b9c368bf3b72b2331a27c286"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
 version = "0.13.2"
 
-[[deps.FiniteDifferences]]
-deps = ["ChainRulesCore", "LinearAlgebra", "Printf", "Random", "Richardson", "SparseArrays", "StaticArrays"]
-git-tree-sha1 = "0ee1275eb003b6fc7325cb14301665d1072abda1"
-uuid = "26cc04aa-876d-5657-8c51-4c34ba976000"
-version = "0.12.24"
-
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.4"
+
+[[deps.Flux]]
+deps = ["Adapt", "ArrayInterface", "CUDA", "ChainRulesCore", "Functors", "LinearAlgebra", "MLUtils", "MacroTools", "NNlib", "NNlibCUDA", "Optimisers", "ProgressLogging", "Random", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "Test", "Zygote"]
+git-tree-sha1 = "62350a872545e1369b1d8f11358a21681aa73929"
+uuid = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+version = "0.13.3"
+
+[[deps.FoldsThreads]]
+deps = ["Accessors", "FunctionWrappers", "InitialValues", "SplittablesBase", "Transducers"]
+git-tree-sha1 = "eb8e1989b9028f7e0985b4268dabe94682249025"
+uuid = "9c68100b-dfe1-47cf-94c8-95104e173443"
+version = "0.1.1"
 
 [[deps.Fontconfig_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
@@ -1033,10 +1553,22 @@ uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
 version = "3.3.6+0"
 
 [[deps.GPUArrays]]
-deps = ["Adapt", "LLVM", "LinearAlgebra", "Printf", "Random", "Serialization", "Statistics"]
-git-tree-sha1 = "c783e8883028bf26fb05ed4022c450ef44edd875"
+deps = ["Adapt", "GPUArraysCore", "LLVM", "LinearAlgebra", "Printf", "Random", "Reexport", "Serialization", "Statistics"]
+git-tree-sha1 = "73a4c9447419ce058df716925893e452ba5528ad"
 uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-version = "8.3.2"
+version = "8.4.0"
+
+[[deps.GPUArraysCore]]
+deps = ["Adapt"]
+git-tree-sha1 = "4078d3557ab15dd9fe6a0cf6f65e3d4937e98427"
+uuid = "46192b85-c4d5-4398-a991-12ede77f4527"
+version = "0.1.0"
+
+[[deps.GPUCompiler]]
+deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "TimerOutputs", "UUIDs"]
+git-tree-sha1 = "47f63159f7cb5d0e5e0cfd2f20454adea429bec9"
+uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
+version = "0.16.1"
 
 [[deps.GR]]
 deps = ["Base64", "DelimitedFiles", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Printf", "Random", "RelocatableFolders", "Serialization", "Sockets", "Test", "UUIDs"]
@@ -1189,6 +1721,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "b53380851c6e6664204efb2e62cd24fa5c47e4ba"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.2+0"
+
+[[deps.JuliaVariables]]
+deps = ["MLStyle", "NameResolution"]
+git-tree-sha1 = "49fb3cb53362ddadb4415e9b73926d6b40709e70"
+uuid = "b14d175d-62b4-44ba-8fb7-3064adc8c3ec"
+version = "0.2.4"
 
 [[deps.KernelDensity]]
 deps = ["Distributions", "DocStringExtensions", "FFTW", "Interpolations", "StatsBase"]
@@ -1368,6 +1906,17 @@ git-tree-sha1 = "b8073fe6973dcfad5fec803dabc1d3a7f6c4ebc8"
 uuid = "e80e1ace-859a-464e-9ed9-23947d8ae3ea"
 version = "1.4.3"
 
+[[deps.MLStyle]]
+git-tree-sha1 = "2041c1fd6833b3720d363c3ea8140bffaf86d9c4"
+uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
+version = "0.4.12"
+
+[[deps.MLUtils]]
+deps = ["ChainRulesCore", "DelimitedFiles", "FLoops", "FoldsThreads", "Random", "ShowCases", "Statistics", "StatsBase", "Transducers"]
+git-tree-sha1 = "cf10b2a295df211c6c7e992be73505bf619c1e52"
+uuid = "f1d291b0-491e-4a28-83b9-f70985020b54"
+version = "0.2.8"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "3d3e902b31198a27340d0bf00d6ac452866021cf"
@@ -1424,14 +1973,26 @@ version = "0.9.1"
 
 [[deps.NNlib]]
 deps = ["Adapt", "ChainRulesCore", "LinearAlgebra", "Pkg", "Requires", "Statistics"]
-git-tree-sha1 = "a0331452b4cfd5e53ee2325376794aea47364d5a"
+git-tree-sha1 = "1a80840bcdb73de345230328d49767ab115be6f2"
 uuid = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
-version = "0.8.7"
+version = "0.8.8"
+
+[[deps.NNlibCUDA]]
+deps = ["CUDA", "LinearAlgebra", "NNlib", "Random", "Statistics"]
+git-tree-sha1 = "e161b835c6aa9e2339c1e72c3d4e39891eac7a4f"
+uuid = "a00861dc-f156-4864-bf3c-e6376f28a68d"
+version = "0.2.3"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "737a5957f387b17e74d4ad2f440eb330b39a62c5"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "1.0.0"
+
+[[deps.NameResolution]]
+deps = ["PrettyPrint"]
+git-tree-sha1 = "1a0fa0e9613f46c9b8c11eee38ebb4f590013c5e"
+uuid = "71a1bf82-56d0-4bbc-8a3c-48b961074391"
+version = "0.1.5"
 
 [[deps.NamedArrays]]
 deps = ["Combinatorics", "DataStructures", "DelimitedFiles", "InvertedIndices", "LinearAlgebra", "Random", "Requires", "SparseArrays", "Statistics"]
@@ -1480,15 +2041,21 @@ uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "ab05aa4cc89736e95915b01e7279e61b1bfe33b8"
+git-tree-sha1 = "9a36165cf84cff35851809a40a928e1103702013"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.14+0"
+version = "1.1.16+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.5+0"
+
+[[deps.Optimisers]]
+deps = ["ChainRulesCore", "Functors", "LinearAlgebra", "Random", "Statistics"]
+git-tree-sha1 = "afb2b39a354025a6db6decd68f2ef5353e8ff1ae"
+uuid = "3bd65402-5787-11e9-1adc-39752487f4e2"
+version = "0.2.7"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1509,9 +2076,9 @@ version = "8.44.0+0"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "7f4869861f8dac4990d6808b66b57e5a425cfd99"
+git-tree-sha1 = "ca433b9e2f5ca3a0ce6702a032fce95a3b6e1e48"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
-version = "0.11.13"
+version = "0.11.14"
 
 [[deps.Parsers]]
 deps = ["Dates"]
@@ -1537,21 +2104,26 @@ version = "3.0.0"
 
 [[deps.PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "bb16469fd5224100e422f0b027d26c5a25de1200"
+git-tree-sha1 = "9888e59493658e476d3073f1ce24348bdc086660"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.2.0"
+version = "1.3.0"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "d457f881ea56bbfa18222642de51e0abf67b9027"
+git-tree-sha1 = "93e82cebd5b25eb33068570e3f63a86be16955be"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.29.0"
+version = "1.31.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.3.0"
+
+[[deps.PrettyPrint]]
+git-tree-sha1 = "632eb4abab3449ab30c5e1afaa874f0b98b586e4"
+uuid = "8162dcfd-2161-5ef2-ae6c-7681170c5f98"
+version = "0.2.0"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
@@ -1595,6 +2167,18 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
+[[deps.Random123]]
+deps = ["Random", "RandomNumbers"]
+git-tree-sha1 = "afeacaecf4ed1649555a19cb2cad3c141bbc9474"
+uuid = "74087812-796a-5b5d-8853-05524746bad3"
+version = "1.5.0"
+
+[[deps.RandomNumbers]]
+deps = ["Random", "Requires"]
+git-tree-sha1 = "043da614cc7e95c703498a491e2c21f58a2b8111"
+uuid = "e6cf234a-135c-5ec9-84dd-332b85af5143"
+version = "1.5.3"
+
 [[deps.RangeArrays]]
 git-tree-sha1 = "b9039e93773ddcfc828f12aadf7115b4b4d225f5"
 uuid = "b3c3ace0-ae52-54e7-9d0b-2c1406fd6b9d"
@@ -1624,10 +2208,10 @@ uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
 version = "0.5.2"
 
 [[deps.RecursiveArrayTools]]
-deps = ["Adapt", "ArrayInterfaceCore", "ArrayInterfaceStaticArrays", "ChainRulesCore", "DocStringExtensions", "FillArrays", "GPUArrays", "LinearAlgebra", "RecipesBase", "StaticArrays", "Statistics", "ZygoteRules"]
-git-tree-sha1 = "c8bb13a16838ce37f94149c356c5664562b46548"
+deps = ["Adapt", "ArrayInterfaceCore", "ArrayInterfaceStaticArraysCore", "ChainRulesCore", "DocStringExtensions", "FillArrays", "GPUArraysCore", "LinearAlgebra", "RecipesBase", "StaticArraysCore", "Statistics", "ZygoteRules"]
+git-tree-sha1 = "7ddd4f1ac52f9cc1b784212785f86a75602a7e4b"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "2.29.2"
+version = "2.31.0"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
@@ -1645,12 +2229,6 @@ deps = ["UUIDs"]
 git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
-
-[[deps.Richardson]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "e03ca566bec93f8a3aeb059c8ef102f268a38949"
-uuid = "708f8203-808e-40c0-ba2d-98a6953ed40d"
-version = "1.4.0"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
@@ -1674,10 +2252,10 @@ version = "2.0.1"
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[deps.SciMLBase]]
-deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "RecipesBase", "RecursiveArrayTools", "StaticArrays", "Statistics", "Tables", "TreeViews"]
-git-tree-sha1 = "ac248d767048e681843ab674b18e483b05bedc09"
+deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "RecipesBase", "RecursiveArrayTools", "StaticArraysCore", "Statistics", "Tables", "TreeViews"]
+git-tree-sha1 = "6a3f7d9b084b508e87d12135de950ac969187954"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.41.2"
+version = "1.42.0"
 
 [[deps.ScientificTypesBase]]
 git-tree-sha1 = "a8e18eb383b5ecf1b5e6fc237eb39255044fd92b"
@@ -1708,6 +2286,11 @@ version = "0.8.2"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+
+[[deps.ShowCases]]
+git-tree-sha1 = "7f534ad62ab2bd48591bdeac81994ea8c445e4a5"
+uuid = "605ecd9f-84a6-4c9e-81e2-4798472b76a3"
+version = "0.1.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -1742,15 +2325,20 @@ version = "0.1.14"
 
 [[deps.Static]]
 deps = ["IfElse"]
-git-tree-sha1 = "5d2c08cef80c7a3a8ba9ca023031a85c263012c5"
+git-tree-sha1 = "11f1b69a28b6e4ca1cc18342bfab7adb7ff3a090"
 uuid = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
-version = "0.6.6"
+version = "0.7.3"
 
 [[deps.StaticArrays]]
-deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "2bbd9f2e40afd197a1379aef05e0d85dba649951"
+deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
+git-tree-sha1 = "9f8a5dc5944dc7fbbe6eb4180660935653b0a9d9"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.4.7"
+version = "1.5.0"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "6edcea211d224fa551ec8a85debdc6d732f155dc"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.0.0"
 
 [[deps.StatisticalTraits]]
 deps = ["ScientificTypesBase"]
@@ -1770,9 +2358,9 @@ version = "1.2.2"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "8977b17906b0a1cc74ab2e3a05faa16cf08a8291"
+git-tree-sha1 = "642f08bf9ff9e39ccc7b710b2eb9a24971b52b1a"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.16"
+version = "0.33.17"
 
 [[deps.StatsFuns]]
 deps = ["ChainRulesCore", "HypergeometricFunctions", "InverseFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
@@ -1788,9 +2376,9 @@ version = "0.14.34"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
-git-tree-sha1 = "9abba8f8fb8458e9adf07c8a2377a070674a24f1"
+git-tree-sha1 = "ec47fb6069c57f1cee2f67541bf8f23415146de7"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-version = "0.6.8"
+version = "0.6.11"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
@@ -1838,6 +2426,12 @@ version = "0.1.5"
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[[deps.TimerOutputs]]
+deps = ["ExprTools", "Printf"]
+git-tree-sha1 = "464d64b2510a25e6efe410e7edab14fffdc333df"
+uuid = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
+version = "0.5.20"
+
 [[deps.Tracker]]
 deps = ["Adapt", "DiffRules", "ForwardDiff", "LinearAlgebra", "LogExpFunctions", "MacroTools", "NNlib", "NaNMath", "Printf", "Random", "Requires", "SpecialFunctions", "Statistics"]
 git-tree-sha1 = "0874c1b5de1b5529b776cfeca3ec0acfada97b1b"
@@ -1857,10 +2451,10 @@ uuid = "a2a6695c-b41b-5b7d-aed9-dbfdeacea5d7"
 version = "0.3.0"
 
 [[deps.Turing]]
-deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "AdvancedPS", "AdvancedVI", "BangBang", "Bijectors", "DataStructures", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "MCMCChains", "NamedArrays", "Printf", "Random", "Reexport", "Requires", "SciMLBase", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker", "ZygoteRules"]
-git-tree-sha1 = "b704f7c0ec4926cc4ca01195eaa8eafa11cfa77f"
+deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "AdvancedPS", "AdvancedVI", "BangBang", "Bijectors", "DataStructures", "DiffResults", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "MCMCChains", "NamedArrays", "Printf", "Random", "Reexport", "Requires", "SciMLBase", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker", "ZygoteRules"]
+git-tree-sha1 = "cba513b222ff87fb55fdccc1a76d26acbc607b0f"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
-version = "0.21.5"
+version = "0.21.6"
 
 [[deps.URIs]]
 git-tree-sha1 = "97bbe755a53fe859669cd907f2d96aee8d2c1355"
@@ -2130,46 +2724,62 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╠═a5aeae12-cb6a-42ad-ba10-08c2291edbba
-# ╟─50543548-e5a5-11ec-321f-d79ad6c55db1
-# ╟─5ccb02ce-2965-4144-9bc5-89bf7079d365
-# ╟─2d7f403e-4647-4c34-b9c8-f617c78eb8c3
-# ╠═820b8250-5f53-4f28-9ebb-98a4228b5a03
-# ╠═e9260470-ee92-424f-a87c-87331e09ed8a
-# ╠═9cd3d3c7-eb99-46b4-8b87-6feafdb46595
-# ╠═24c39d29-295c-47cd-8ccc-f772ecadc872
-# ╠═abde2a4a-7f49-430f-b8e3-3231789a0a6a
-# ╟─e0129b8e-eb09-406e-b532-4f516461d909
-# ╠═f67994bb-8887-40f5-943b-180470f5cee3
-# ╠═a753083a-b302-4ad8-9ea5-4170fcb344fe
-# ╟─997c33bf-7aac-4176-b9fb-466405803088
-# ╟─c99c122e-8be2-44ff-87d2-2f3a987f8c1b
-# ╠═68d69b50-4e9c-49f5-9ef8-48907a321223
-# ╟─7996e6ff-b834-4d35-b41e-ce6fc41de523
-# ╟─3914c205-dd87-435a-8402-dc85bfed143d
-# ╟─3050acb3-ad34-415a-920c-7825a801549a
-# ╟─fe23fd04-e7f0-4a93-8bf5-38146f8dac11
-# ╟─daa993ca-12fd-4d9b-936b-d16bdcc72571
-# ╟─95607851-c454-4e89-8ec0-ffb20750e351
-# ╠═a4f6dccc-3dd3-4311-b4d2-2e539b45d433
-# ╠═1e7397dc-8069-4841-9fef-4ea027910c08
-# ╠═b07ce81e-d83c-403d-92af-e7f305663a47
-# ╠═85996b49-5f36-42b8-aaee-752bbf6fd6e3
-# ╟─84d65d04-4984-4565-aba7-7577fc7fc64d
-# ╟─c8f49593-2f30-4142-a278-bd772467a2b9
-# ╟─52dc2fef-dcb4-4c07-8d3f-22030f251013
-# ╟─e3ce0490-d9a0-49b9-b631-d6f2bcd86805
-# ╟─33e0dd32-6f75-4453-8de7-0129a9e365eb
-# ╟─0d6833c3-fe75-4d6c-aa1b-ee359600ad2a
-# ╟─63d63399-33ac-45c6-a819-025ecc591867
-# ╟─16e9ac03-8f05-45f1-b780-5573d2f34434
-# ╠═e09d661f-65b1-4438-ae48-6f1301f51b39
-# ╟─19bdcc80-fa95-4030-aaed-2700b1bb1b73
-# ╟─caa964dd-bab8-4535-95be-c7d7187cd2d5
-# ╠═3809af1f-f3a8-4d82-bf65-38c507663cb3
-# ╠═dcb6dee1-b4fa-4126-99a9-819241e86f65
-# ╠═bebb8687-e599-4411-9769-a05a3299eb20
-# ╠═f51a5cff-03bb-4cd4-8114-e7ee415ef5b2
-# ╟─62eb03a1-25f4-4bec-a215-0e7cf4e235f3
+# ╠═093a22cb-36a4-41d8-9c0e-46cf876192fe
+# ╟─51c76828-f55e-11ec-3e26-61ba6bc94c5a
+# ╟─f5d9b1cc-63fc-4bdf-9e76-184f8d85cb60
+# ╟─06250275-93d3-4004-b2c5-37bc093a6dcb
+# ╟─ad647b20-9e7a-4b53-bbc5-7ff0c49c2a3c
+# ╟─de714c36-1eac-4a92-8d6c-77947c245894
+# ╟─141fccea-1712-4a19-a0ad-e29e83ce7bc6
+# ╟─cd2de8de-961a-4365-bac0-3b27b9041159
+# ╟─51e61619-585e-4699-99f0-65ad18ec165b
+# ╟─0ccdd961-9eb4-4854-90d6-7b41dda103a4
+# ╟─ebcca522-2f3f-4d89-bd7a-96f72dba8056
+# ╟─41e52510-2d17-4a4d-b6f5-c452d7f84883
+# ╟─d29c0514-6a1e-4516-9d27-a0674483e5b5
+# ╟─747f77f9-eda4-4a49-8428-88c1b91a68c9
+# ╟─f62b5fee-4765-466e-9f26-02a5b119a1e8
+# ╟─f30b5b09-860e-4dc7-91c4-2dff8c6608a3
+# ╠═fcb61290-3de5-403a-9183-7668baf6dec6
+# ╠═7813bb32-8b29-442d-814b-eb513e50d526
+# ╠═f0b3f4d9-2a54-4351-bb73-30320b3fc58e
+# ╠═b36d4f31-95ea-4ce6-9409-e3ee1da9c24e
+# ╟─60c96652-ffe5-444a-8cda-b5fae6472c77
+# ╟─c4351958-ef47-4c69-ba95-da52e7b54fb5
+# ╟─8ab14983-73fd-4b85-82ad-a0b3404f5918
+# ╟─0ed401f5-097c-4206-8336-b751c3b8da17
+# ╟─d7646301-f225-4319-839b-855140801f54
+# ╟─084f17cb-8301-4708-9c81-c2b8c5f041f7
+# ╟─cfdeee66-e4c4-48fc-af95-287e70fb0ec8
+# ╟─8b009cd4-bafc-48aa-9dcd-df92e13d4b6d
+# ╠═a1bb4425-17cf-4d62-836f-559020721217
+# ╠═3f80ce90-c4d2-4085-80ae-f1ce1b0088a4
+# ╠═fb9b8223-14ec-4e4c-b9a9-f9c44e912008
+# ╠═8c2c59b1-063c-4010-af76-de63dec44717
+# ╠═c7687b5f-0740-4dd9-b26b-8d29537ddced
+# ╠═2d85dce1-d532-42f9-9f1c-33932f3f425f
+# ╠═caefb087-9004-4762-8026-c9717ee1187e
+# ╠═75f28936-2b95-4103-a06b-fd4c4908919a
+# ╠═7446506a-17fa-4c27-9ef4-dcef0057202a
+# ╠═a3a01e98-c8fc-428d-9264-9759fabe6826
+# ╠═9ceb3db3-da5e-47c8-9244-89c213d8f0b4
+# ╠═ae10fc12-8ddc-4eab-815d-64fd49f5b37d
+# ╠═03c9a889-108a-4f4e-90e2-29526c3c6ead
+# ╠═94b16351-7968-486c-93e9-d80910741cfc
+# ╠═34a2a48d-8802-4fb8-bcac-41b3a4de793c
+# ╠═7f229bb8-cfc5-4cc1-a603-2244dddad00d
+# ╠═ef8a496e-791c-47b5-84ee-af95c6d71df6
+# ╠═1b81b6cd-87d1-4c49-bd54-06c57c62182b
+# ╟─d79dc084-0cd8-484e-bd17-3d0abce254e1
+# ╠═f7235d15-af24-48de-beba-ecb52f55896a
+# ╠═a474cfda-755e-4fed-a6d3-441195c3ed3a
+# ╠═0e5ea9e0-c335-4309-92d9-bda23328a230
+# ╠═d1b3c121-f35d-491c-834f-6c8de8410df0
+# ╠═e78b2b3c-2660-4651-b5d9-4d974af4d451
+# ╠═58cd8b62-5f55-4e7a-a5eb-ea372eb78e88
+# ╠═de6718b8-b3d1-461b-8d8f-0c575f1208b4
+# ╟─0a7e9d02-1a8b-4c9f-a61c-55c5276ecfef
+# ╠═15f1b0ab-448a-4bbf-9941-9502623681e5
+# ╟─4bae7ad5-e93e-452c-b9cf-6098b480999c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
