@@ -10,4 +10,4 @@ I use this website to host learning material for student projects at the Univers
 - [Week 3](./Bayes2.jl.html), Bayesian inference 2, MCMC
   - [Week 3 discussion](./Bayes2_sol.jl.html)
 - [Week 4](./Bayes3.jl.html), Bayesian inference 3, variational inference
-  
+  - [Week 4 discussion](./Bayes3_sol.jl.html)
