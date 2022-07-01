@@ -109,7 +109,7 @@ That is we want, on average sense, to maximise the full joint term, but at the s
 # ╔═╡ ad647b20-9e7a-4b53-bbc5-7ff0c49c2a3c
 md"""
 
-**ELBO**. Note that KL divergence is always positive, therefore 
+**ELBO & Variational free energy**. Note that KL divergence is always positive, therefore 
 
 
 $$\begin{align}\text{KL}[q\|p] 
@@ -123,7 +123,9 @@ The model evidence is lowered bounded by the optimisation objective: $\text H(q)
 VI therefore can also be viewed as a procedure to approximate the log model evidence $\ln p(\mathcal D)$,  which is intractable in most general cases, *from below*.
 
 
-The negative ELBO is called *variational free energy* in quantum physics community. 
+The negative ELBO is called *variational free energy* in quantum physics community:
+
+$$\mathcal F(q) \triangleq - \text{ELBO}(q) = - \text{H}(q(w)) - \int q(w) \ln p(w, \mathcal D) dw$$
 """
 
 # ╔═╡ de714c36-1eac-4a92-8d6c-77947c245894
@@ -233,7 +235,7 @@ Check [week 2's](https://lf28.github.io/MSc_2022/Bayes1_sol.jl.html) solution fo
 # ╔═╡ 0ccdd961-9eb4-4854-90d6-7b41dda103a4
 md"""
 
-Similarly, we can find the VI for $\boldsymbol \alpha, \beta$, due to the conjugate priors being used, they are all of Gamma form. And you should verify it. 
+**Further details.** Similarly, we can find the VI for $\boldsymbol \alpha, \beta$, due to the conjugate priors being used, they are all of Gamma form. And you should verify it. 
 
 To make it complete, their VI are
 
@@ -312,7 +314,7 @@ $$x \sim p(x|\text{mb}(x)),$$
 
 MFVI aims at *fixating* the full conditionals to its expectation,
 
-$$q(x) = E_{q(\text{mb}(x))}[p(x|\text{mb}(x))].$$
+$$q(x) \leftarrow \exp\{E_{q(\text{mb}(x))}[\ln  p(x|\text{mb}(x))]\}.$$
 
 """
 
@@ -337,22 +339,6 @@ $$\beta^{(m)} \sim \text{Gamma}(\beta; c_N, d_N)$$
 
 
 Also note that the distribution parameters are different for the two algorithms. Gibbs sampling rely on the samples from other conditionals while MFVI uses the expectations from the other mean field variational distributions.
-"""
-
-# ╔═╡ f62b5fee-4765-466e-9f26-02a5b119a1e8
-md"""
-
-3).
-MFVI would fail as the approximating distribution is of unknown form, and the expectation has no closed form solution.
-
-Take logistic regression for example, the likelihood is not exponential quadratic but logistic transformation of a linear function of $\theta$. The posterior therefore is no longer Gaussian: i.e. we cannot massage the following term into a quadratic function:
-
-$$q^\ast(\theta) = \langle \ln p(\theta|\boldsymbol \alpha)\rangle + \langle \ln p(\mathbf y|\Phi, \theta)\rangle$$
-
-
-For neural networks, the likelihood term can be even more complicated due to the non-linear transformations used: $f(\phi_i)$, the likelihood will never by quadratic. 
-
-Then the whole iterative update procedure falls apart, e.g. $$\langle \theta \rangle$$ is unknown. 
 """
 
 # ╔═╡ f30b5b09-860e-4dc7-91c4-2dff8c6608a3
@@ -426,6 +412,22 @@ end;
 
 # ╔═╡ b36d4f31-95ea-4ce6-9409-e3ee1da9c24e
 plot(wᵥᵢ, label="μ")
+
+# ╔═╡ f62b5fee-4765-466e-9f26-02a5b119a1e8
+md"""
+
+3).
+MFVI would fail as the approximating distribution is of unknown form, and the expectation has no closed form solution.
+
+Take logistic regression for example, the likelihood is not exponential quadratic but logistic transformation of a linear function of $\theta$. The posterior therefore is no longer Gaussian: i.e. we cannot massage the following term into a quadratic function:
+
+$$q^\ast(\theta) = \langle \ln p(\theta|\boldsymbol \alpha)\rangle + \langle \ln p(\mathbf y|\Phi, \theta)\rangle$$
+
+
+For neural networks, the likelihood term can be even more complicated due to the non-linear transformations used: $f(\phi_i)$, the likelihood will never by quadratic. 
+
+Then the whole iterative update procedure falls apart, e.g. $$\langle \theta \rangle$$ is unknown. 
+"""
 
 # ╔═╡ 8ab14983-73fd-4b85-82ad-a0b3404f5918
 md"""
@@ -509,18 +511,29 @@ $$\text H(q) = \frac{D}{2} +\frac{1}{2} \ln |2\pi \mathbf V| = \frac{D}{2} +\fra
 
 The free energy becomes 
 
-$$\mathcal F(q) = - \sum_d \ln L_{dd} - \langle \ln p(\mathbf w, \mathcal D)\rangle_q + C$$
+$$\mathcal F(q) = - \sum_d \ln L_{dd} - \langle \ln p(\mathbf w, \mathcal D)\rangle_q + C.$$
 
-Take gradient of the  variational free energy w.r.t $\mathbf{m}, \mathbf L:$
+*Note that I have not assumed the prior is Gaussian here. Therefore, the model here is more general. We can for example assume $p(\mathbf w)$ is Laplace distributed instead of Gaussian to achieve more sparse posterior (Laplace prior corresponds to Bayesian LASSO).* 
+
+Next, we take gradient of $\mathcal F$ w.r.t $\mathbf{m}, \mathbf L:$
 
 $$\nabla_{\mathbf m} \mathcal F = - \nabla_{\mathbf m}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q, $$
 
 
 $$\nabla_{\mathbf L} \mathcal F = - \nabla_{\mathbf L} \left (\sum_d \ln L_{dd}\right )- \nabla_{\mathbf L}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q,$$
 
-The first part is $\nabla_{\mathbf L} \left ( \sum_d \ln L_{dd} \right ) = \text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D$
+The gradient of the negative entropy term is:
 
+$\frac{\partial \sum_d \ln L_{dd}}{\partial L_{ij}} =  L_{ij}^{-1}\cdot \delta_{i=j},$
 
+In matrix notation:
+
+$\nabla_{\mathbf L} \left ( \sum_d \ln L_{dd} \right ) = \text{diag}(\{L_{dd}^{-1}\})\circ \mathbf I_D$
+
+"""
+
+# ╔═╡ c915353c-3cdc-4949-93a9-3b8b21e3ba4f
+md"""
 We use the reparameterisation trick or path-wise gradient to side-step the difficulty of calculating the expectation.
 
 First note, if $\nu \sim N(\mathbf 0, \mathbf I),$ then $\mathbf w \triangleq \mathbf m + \mathbf L \nu \sim N(\mathbf m, \mathbf V)$, therefore
@@ -534,7 +547,7 @@ $$\begin{align}\nabla_{\mathbf m} \langle f(\mathbf w)\rangle_{\mathbf w\sim \ma
 &=\langle \nabla_{\mathbf m + \mathbf L \nu}f(\mathbf m + \mathbf L \nu)\rangle_{\nu \sim \mathcal N(\mathbf 0, \mathbf I)}
 \end{align}$$
 
-The second last equality holds as under regularity conditions, we can exchange the gradient and expectation. 
+We have exchanged the gradient and expectation order in the second last step, which holds under regularity conditions.
 
 For $\mathbf L$, we have 
 
@@ -553,7 +566,11 @@ where $$\mathbf S_{\mathbf L} = \begin{bmatrix}1& 0 &0 & \ldots& 0\\
 # ╔═╡ cfdeee66-e4c4-48fc-af95-287e70fb0ec8
 md"""
 
-Therefore, we first sample $\nu^{(m)} \sim \mathcal N(\mathbf 0, \mathbf I_D),$ then propogate to $\mathbf w^{(m)} = \mathbf m + \mathbf L \nu^{(m)}$, the pathwise gradient can be approximated as
+**Unbiased Monte Carlo gradient approximation.** To approximate the gradient, we first sample 
+
+$\nu^{(m)} \sim \mathcal N(\mathbf 0, \mathbf I_D),$ then propogate to 
+
+$\mathbf w^{(m)} = \mathbf m + \mathbf L \nu^{(m)}.$ The pathwise Monte Carlo gradient is
 
 $$\nabla_{\mathbf m} \mathcal F = - \nabla_{\mathbf m}  \langle \ln p(\mathbf w, \mathcal D)\rangle_q = - \langle \nabla_{\mathbf w}   \ln p(\mathbf w, \mathcal D)\rangle_{\nu\sim N(\mathbf 0, \mathbf I)} \approx -\frac{1}{M} \sum_{m} \nabla_{\mathbf w^{(m)}}   \ln p(\mathbf w^{(m)}, \mathcal D)$$
 
@@ -566,10 +583,11 @@ $$\begin{align}\nabla_{\mathbf L} \mathcal F &= - \text{diag}(\{L_{dd}^{-1}\})\c
 # ╔═╡ 8b009cd4-bafc-48aa-9dcd-df92e13d4b6d
 md"""
 
-Finally, note that due to reparameterisation of the diagonal entries of $\mathbf L,$ the diagonal entries's gradient need to be multiplied by $\exp\circ(\text{diag}(\mathbf L^\ast))$, where we have just simply applied chain rule.
+Finally, note that due to reparameterisation of the diagonal entries of $\mathbf L,$ the diagonal entries's gradient need to be multiplied by $\exp(L^\ast_{dd})$, where we have just simply applied chain rule.
 
 $$\begin{align}\nabla_{\mathbf L^\ast} \mathcal F &= \nabla_{\mathbf L} \mathcal F
-\end{align} \circ \left (\exp\circ(\text{diag}(\mathbf L^\ast))\right )$$
+ \circ \text{diag}(\{\exp(L_{dd}^\ast)\})= \nabla_{\mathbf L} \mathcal F
+ \circ \text{diag}(\{L_{dd}\})\end{align}$$
 
 """
 
@@ -613,9 +631,17 @@ function svi_grad(mm, LL, ℓ; mc = 1, mf=false)
 	return ∇m, ∇L, ℱ
 end
 
+# ╔═╡ 59154ad8-197c-4ea2-a0a4-fd0e3c862af1
+md"""
+
+**A simple example**
+
+The above algorithm can be used to approximate any **unconstrained** distribution with a Gaussian. 
+"""
+
 # ╔═╡ fb9b8223-14ec-4e4c-b9a9-f9c44e912008
 begin
-	# unnormalised log target density
+	# unnormalised log target density to approximate
 	function log_density(x)
 		mu = x[1]
 		log_sigma = x[2]
@@ -623,8 +649,10 @@ begin
 		mu_density = logpdf(Normal(0, exp(log_sigma)), mu)
 		return sigma_density + mu_density
 	end
-	
+
+	# find the gradient
 	gx = x -> ForwardDiff.gradient(log_density, x); 
+	# this is slow: ideally you should define a vectorised version 
 	log_den_fun = (x) -> (mapslices(log_density, x, dims=1)[:], mapslices(gx, x, dims=1))
 end
 
@@ -672,30 +700,12 @@ begin
 end
 
 # ╔═╡ 7446506a-17fa-4c27-9ef4-dcef0057202a
-plot(-ℱs)
-
-# ╔═╡ a3a01e98-c8fc-428d-9264-9759fabe6826
-begin
-
-	function ℓ_fixed_basis(w, Φ, ts, m₀, α, β)
-		∇ℓ = - α .* w + β .* (Φ' * (ts .- Φ * w))
-		logpdf(MvNormal(m₀, sqrt.(1.0 ./ α)), w)  + sum(-0.5 .* β .* (ts .- Φ*w).^2, dims=1)[:], ∇ℓ
-	end
-
-
-	function ℓ_fixed_basis_2(w, Φ, ts, α, β)
-		dim = length(w)
-		# logpdf(filldist(LocationScale(0, sqrt(1/α), TDist(2)), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
-		logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
-		# logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * abs.(ts - Φ*w))
-	end
-
-end
+plot(-ℱs, label="ELBO")
 
 # ╔═╡ 9ceb3db3-da5e-47c8-9244-89c213d8f0b4
 begin
 
-	function ffvi(ℓfun, dim; mc=1, maxiters=5000 ,meanfield = false)
+	function ffvi(ℓfun, dim; mc=1, maxiters=5000, meanfield = false)
 		m = randn(dim)
 		L = randn(dim, dim)
 		opt = AMSGrad(0.01, (0.9, 0.999))
@@ -709,6 +719,25 @@ begin
 	end
 end
 
+# ╔═╡ a3a01e98-c8fc-428d-9264-9759fabe6826
+begin
+
+	function ℓ_fixed_basis(w, Φ, ts, m₀, α, β)
+		∇ℓ = - α .* w + β .* (Φ' * (ts .- Φ * w))
+		logpdf(MvNormal(m₀, sqrt.(1.0 ./ α)), w)  + sum(-0.5 .* β .* (ts .- Φ*w).^2, dims=1)[:], ∇ℓ
+	end
+
+
+	# Laplace prior with fixed basis expansion model
+	function ℓ_fixed_basis_2(w, Φ, ts, α, β)
+		dim = length(w)
+		# logpdf(filldist(LocationScale(0, sqrt(1/α), TDist(2)), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
+		logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * (ts - Φ*w).^2)
+		# logpdf(filldist(LocationScale(0, sqrt(1/α), Laplace()), dim), w)+ sum(-0.5 * β * abs.(ts - Φ*w))
+	end
+
+end
+
 # ╔═╡ ae10fc12-8ddc-4eab-815d-64fd49f5b37d
 begin
 	dim_fb = size(Φ)[2]
@@ -719,67 +748,53 @@ end
 # ╔═╡ 03c9a889-108a-4f4e-90e2-29526c3c6ead
 plot(-ℱs_fb)
 
+# ╔═╡ caafef71-22db-4631-98af-9d4eb39e5acd
+md"""
+
+**Hyperparameter update**
+
+We can also optimise the hyperparameters together with the variational parameter. For Gaussian prior models, the hyperparameters can be updated in closed form. We use the fixed basis expansion model below as an example.
+
+
+Remember the hyperparameters are $$\sigma^2$$ and $\boldsymbol \lambda^2$. Take the gradient of $\mathcal F$ w.r.t $\sigma^2$ and $\boldsymbol\lambda^2$ and set them to zero: their closed form estimators are
+
+$$\sigma^2 = \frac{1}{N} \langle (\mathbf y - \Phi \mathbf w)^\top(\mathbf y - \Phi \mathbf w)\rangle_q,$$
+
+$$\lambda^2_{d} = \boldsymbol \Sigma_{dd} + m_d^2.$$
+
+The derivation is left as an exercise.
+"""
+
 # ╔═╡ 94b16351-7968-486c-93e9-d80910741cfc
 begin
 
-
-	# function svi_grad_2(mm, LL, θ, ℓ; mc = 1, mf=false)
-	# 	D = size(mm)[1]
-	# 	diagidx = diagind(LL)
-	# 	if !mf
-	# 		L = tril(LL)
-	# 		L[diagidx] = exp.(diag(LL))
-	# 	else
-	# 		L = Diagonal(exp.(diag(LL)))
-	# 	end
-	# 	ℱ = -0.5 * D - 0.5 * D * log(2 * π) - sum(diag(LL))
-	# 	ν = randn(D, mc)
-	# 	wσ² = exp.(2.0 .* θ)
-	# 	∇θ = (- diag(L * L')  - mm.^2) ./ wσ² .+ 1.0
-	# 	ww = mm .+ L * ν
-	# 	ℓs, ∇ws = ℓ(ww)
-	# 	ℱ -= mean(ℓs)
-	# 	∇m = - mean(∇ws, dims=2)[:]
-	# 	∇L = - tril((1 / mc) .* ∇ws * ν') 
-	# 	∇L[diagidx] = (∇L[diagidx] .* L[diagidx]) 
-	# 	∇L -= I
-	# 	#  fixed form plus mean field assumption: i.e. isotropic diagonal Gaussian
-	# 	if mf
-	# 		∇L = ∇L .* Matrix(I, D,D)
-	# 	end
-	# 	return ∇m, ∇L, ∇θ, ℱ
-	# end
 
 	function ffvi_fixed_basis_regression(ℓlik, ℓprior, dim; mc=1, maxiters=5000, meanfield = false)
 		m = zeros(dim)
 		L = zeros(dim, dim)
 		opt = AMSGrad(0.01, (0.9, 0.999))
 		ℱs = zeros(maxiters) 
-		θ = log(10.0) * ones(dim) 
-		θ₀ = log(10.0)
-		σ² = exp.(2.0 .* θ)
-		s = exp.(2.0 .* θ₀)
+		λ² = 100.0 * ones(dim)
+		σ² = 100.0
 		for t in 1:maxiters
 			function ℓfun(w) 
-				logL, ∇l = ℓlik(w, s) 
-				logP, ∇p = ℓprior(w, σ²)
+				logL, ∇l = ℓlik(w, σ²) 
+				logP, ∇p = ℓprior(w, λ²)
 				return logL + logP, ∇l+∇p
 			end
-			∇m, ∇L,  ℱs[t] = svi_grad(m, L, ℓfun; mc = mc, mf=meanfield)
+			∇m, ∇L, ℱs[t] = svi_grad(m, L, ℓfun; mc = mc, mf=meanfield)
 			Flux.Optimise.update!(opt, m, ∇m)
 			Flux.Optimise.update!(opt, L, ∇L)
-			# alternatively, gradient descent on hyperparameters
+			# alternatively, gradient descent on hyperparameters after reparameterisation
 			# Flux.Optimise.update!(opt, θ, ∇θ)
 			# θ[θ .> 100] .= 100.0
 			# update hyperparameter
 			L0 = pack_L(L)
 			Σ = L0 * L0'
-			# σ² = (sum(L0.^2) + sum(m.^2))/dim
-			σ² = diag(Σ) + m.^2
-			# s = mean((ts - Φ * m).^2)
-			s = (sum((ts .- Φ * m).^2) + tr(Φ'*Φ * Σ))/ size(Φ)[1]
+			λ² = diag(Σ) + m.^2
+			σ² = (sum((ts .- Φ * m).^2) + tr(Φ'*Φ * Σ))/ size(Φ)[1]
 		end
-		return m, L, ℱs, σ², s
+		return m, L, ℱs, λ², σ²
 	end
 
 	function ℓ_fixed_basis_lik(w, Φ, ts, m₀, β)
@@ -805,15 +820,15 @@ begin
 end
 
 # ╔═╡ 7f229bb8-cfc5-4cc1-a603-2244dddad00d
-plot((1 ./ σ²_))
+plot(log.(1 ./ σ²_), label="log(α)")
 
 # ╔═╡ ef8a496e-791c-47b5-84ee-af95c6d71df6
-plot(-ℱs_fb_)
+plot(-ℱs_fb_, label="ELBO")
 
 # ╔═╡ 1b81b6cd-87d1-4c49-bd54-06c57c62182b
 begin
-	
-	ℓ_fb_2(w) = ℓ_fixed_basis_2(w, Φ, ts, 1.0, 1.0)
+	# Laplace prior model
+	ℓ_fb_2(w) = ℓ_fixed_basis_2(w, Φ, ts, 2.0, 1.0)
 	gx_fb2 = x -> ForwardDiff.gradient(ℓ_fb_2, x); 
 	ℓ_fb_fun2 = (x) -> (mapslices(ℓ_fb_2, x, dims=1)[:], mapslices(gx_fb2, x, dims=1))
 	m_fb2 , L_fb2 , ℱs_fb2 = ffvi(ℓ_fb_fun2, dim_fb)
@@ -837,6 +852,12 @@ begin
 	# end
 	# plot(ℱs_normal)
 end
+
+# ╔═╡ 75b2f8a2-228a-4da4-92f7-a4890f53fc54
+md"""
+
+**3) Bayesian logistic regression by fixed form VI**
+"""
 
 # ╔═╡ a474cfda-755e-4fed-a6d3-441195c3ed3a
 # vectorised version of log posterior of logistic regression
@@ -970,7 +991,7 @@ begin
 		
 	
 	plot!(xs, Φₜₑₛₜ*wᵥᵢ,  linestyle=:solid, lw=2, label="MFVI")
-	plot!(xs, Φₜₑₛₜ*m_fb, linestyle=:solid, lw=2, label="FFVI")
+	plot!(xs, Φₜₑₛₜ*m_fb, linestyle=:solid, lw=2, label="FFVI with fixed hyper")
 	plot!(xs, Φₜₑₛₜ*m_fb_, linestyle=:solid, lw=2, label="FFVI with hyper update")
 	plot!(xs, Φₜₑₛₜ*m_fb2, linestyle=:solid, lw=2, label="FFVI Laplace prior")
 
@@ -2724,7 +2745,7 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╠═093a22cb-36a4-41d8-9c0e-46cf876192fe
+# ╟─093a22cb-36a4-41d8-9c0e-46cf876192fe
 # ╟─51c76828-f55e-11ec-3e26-61ba6bc94c5a
 # ╟─f5d9b1cc-63fc-4bdf-9e76-184f8d85cb60
 # ╟─06250275-93d3-4004-b2c5-37bc093a6dcb
@@ -2738,7 +2759,6 @@ version = "0.9.1+5"
 # ╟─41e52510-2d17-4a4d-b6f5-c452d7f84883
 # ╟─d29c0514-6a1e-4516-9d27-a0674483e5b5
 # ╟─747f77f9-eda4-4a49-8428-88c1b91a68c9
-# ╟─f62b5fee-4765-466e-9f26-02a5b119a1e8
 # ╟─f30b5b09-860e-4dc7-91c4-2dff8c6608a3
 # ╠═fcb61290-3de5-403a-9183-7668baf6dec6
 # ╠═7813bb32-8b29-442d-814b-eb513e50d526
@@ -2746,32 +2766,37 @@ version = "0.9.1+5"
 # ╠═b36d4f31-95ea-4ce6-9409-e3ee1da9c24e
 # ╟─60c96652-ffe5-444a-8cda-b5fae6472c77
 # ╟─c4351958-ef47-4c69-ba95-da52e7b54fb5
+# ╟─f62b5fee-4765-466e-9f26-02a5b119a1e8
 # ╟─8ab14983-73fd-4b85-82ad-a0b3404f5918
 # ╟─0ed401f5-097c-4206-8336-b751c3b8da17
 # ╟─d7646301-f225-4319-839b-855140801f54
 # ╟─084f17cb-8301-4708-9c81-c2b8c5f041f7
+# ╟─c915353c-3cdc-4949-93a9-3b8b21e3ba4f
 # ╟─cfdeee66-e4c4-48fc-af95-287e70fb0ec8
 # ╟─8b009cd4-bafc-48aa-9dcd-df92e13d4b6d
 # ╠═a1bb4425-17cf-4d62-836f-559020721217
 # ╠═3f80ce90-c4d2-4085-80ae-f1ce1b0088a4
+# ╟─59154ad8-197c-4ea2-a0a4-fd0e3c862af1
 # ╠═fb9b8223-14ec-4e4c-b9a9-f9c44e912008
 # ╠═8c2c59b1-063c-4010-af76-de63dec44717
 # ╠═c7687b5f-0740-4dd9-b26b-8d29537ddced
 # ╠═2d85dce1-d532-42f9-9f1c-33932f3f425f
 # ╠═caefb087-9004-4762-8026-c9717ee1187e
 # ╠═75f28936-2b95-4103-a06b-fd4c4908919a
-# ╠═7446506a-17fa-4c27-9ef4-dcef0057202a
-# ╠═a3a01e98-c8fc-428d-9264-9759fabe6826
+# ╟─7446506a-17fa-4c27-9ef4-dcef0057202a
 # ╠═9ceb3db3-da5e-47c8-9244-89c213d8f0b4
+# ╠═a3a01e98-c8fc-428d-9264-9759fabe6826
 # ╠═ae10fc12-8ddc-4eab-815d-64fd49f5b37d
 # ╠═03c9a889-108a-4f4e-90e2-29526c3c6ead
+# ╟─caafef71-22db-4631-98af-9d4eb39e5acd
 # ╠═94b16351-7968-486c-93e9-d80910741cfc
 # ╠═34a2a48d-8802-4fb8-bcac-41b3a4de793c
-# ╠═7f229bb8-cfc5-4cc1-a603-2244dddad00d
-# ╠═ef8a496e-791c-47b5-84ee-af95c6d71df6
+# ╟─7f229bb8-cfc5-4cc1-a603-2244dddad00d
+# ╟─ef8a496e-791c-47b5-84ee-af95c6d71df6
 # ╠═1b81b6cd-87d1-4c49-bd54-06c57c62182b
 # ╟─d79dc084-0cd8-484e-bd17-3d0abce254e1
 # ╠═f7235d15-af24-48de-beba-ecb52f55896a
+# ╟─75b2f8a2-228a-4da4-92f7-a4890f53fc54
 # ╠═a474cfda-755e-4fed-a6d3-441195c3ed3a
 # ╠═0e5ea9e0-c335-4309-92d9-bda23328a230
 # ╠═d1b3c121-f35d-491c-834f-6c8de8410df0
